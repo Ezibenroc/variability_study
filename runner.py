@@ -47,7 +47,7 @@ def run_dtrsm(m, n, lead_A, lead_B):
     return float(result)
 
 def get_sizes(nb=3):
-    return tuple(random.randint(0, BIG_SIZE) for _ in range(nb))
+    return tuple(random.randint(1, BIG_SIZE) for _ in range(nb))
     return (size,)*nb
 
 def get_dim(sizes):
