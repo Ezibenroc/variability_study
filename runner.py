@@ -45,7 +45,7 @@ def run_dtrsm(m, n, lead_A, lead_B):
     return float(result)
 
 def get_sizes(nb=3):
-    prod = random.randint(1, 2000**nb)
+    prod = random.randint(1, 5000**nb)
     size = int(prod**(1/nb))
     return (size,)*nb
 
