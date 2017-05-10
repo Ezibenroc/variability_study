@@ -5,8 +5,14 @@ from pandas import DataFrame
 import statsmodels.formula.api as statsmodels
 
 def get_reg(filename):
+    if 'dgemm' in filename:
+        model = 'time ~ I(m*n*k)'
+    elif 'dtrsm' in filename:
+        model = 'time ~ I(m*n**2)'
+    else:
+        sys.stderr.write('ERROR, did not recognize experiment with file name.\n')
+        sys.exit(1)
     dataframe = DataFrame.from_csv(filename, index_col=None)
-    model = 'time ~ size_product'
     reg = statsmodels.ols(formula=model, data=dataframe).fit()
     if reg.rsquared < 0.95:
         print('WARNING: bad R-squared, got %f.' % reg.rsquared)

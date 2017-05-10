@@ -13,8 +13,7 @@ END_STR = '\033[0m'
 DGEMM_EXEC = './dgemm_test'
 DTRSM_EXEC = './dtrsm_test'
 
-BIG_SIZE   = 5000
-SMALL_SIZE = 10
+BIG_SIZE = 5000
 
 def print_color(msg, color):
     print('%s%s%s' % (color, msg, END_STR))
@@ -48,28 +47,25 @@ def run_dtrsm(m, n, lead_A, lead_B):
     return float(result)
 
 def get_sizes(nb=3):
-    base_size = random.choice([BIG_SIZE, SMALL_SIZE])
-    size = random.randint(int(base_size*0.9), int(base_size*1.1))
+    return tuple(random.randint(0, BIG_SIZE) for _ in range(nb))
     return (size,)*nb
 
-def get_dim(size):
-    dim = size
-    return dim
+def get_dim(sizes):
+    return tuple(max(sizes) for _ in range(len(sizes)))
 
 def run_exp_generic(run_func, nb_sizes, csv_writer):
     sizes = get_sizes(nb_sizes)
-    leads = tuple(get_dim(s) for s in sizes)
+    leads = get_dim(sizes)
     time = run_func(*sizes, *leads)
     size_product = functools.reduce(lambda x,y: x*y, sizes, 1)
     lead_product = functools.reduce(lambda x,y: x*y, leads, 1)
     ratio = lead_product/size_product
-    csv_writer.writerow((time, size_product, lead_product, ratio, *sizes, *leads))
+    csv_writer.writerow((time, *sizes, *leads))
 
 def run_all_dgemm(csv_file, nb_exp):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(('time', 'size_product', 'lead_product', 'ratio',
-            'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C'))
+        csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
             run_exp_generic(run_dgemm, 3, csv_writer)
@@ -77,8 +73,7 @@ def run_all_dgemm(csv_file, nb_exp):
 def run_all_dtrsm(csv_file, nb_exp):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(('time', 'size_product', 'lead_product', 'ratio',
-            'm', 'n', 'lead_A', 'lead_B'))
+        csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
             run_exp_generic(run_dtrsm, 2, csv_writer)

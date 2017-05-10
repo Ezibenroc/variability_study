@@ -41,7 +41,7 @@ int main(int argc, char* argv[])
     if(m <= 0 || n <= 0 ||
             lead_A <= 0 || lead_B <= 0)
         syntax(argv[0]);
-    double *A = allocate_matrix(m, m, lead_A);
+    double *A = allocate_matrix(m, n, lead_A);
     double *B = allocate_matrix(m, n, lead_B);
 
 	double alpha = 1.;
