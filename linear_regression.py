@@ -17,4 +17,4 @@ if __name__ == '__main__':
         print('Syntax: %s <file_name>' % sys.argv[0])
         sys.exit(1)
     reg = get_reg(sys.argv[1])
-    print(reg.params['size_product'])
+    print(reg.params)

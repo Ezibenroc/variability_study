@@ -13,6 +13,9 @@ END_STR = '\033[0m'
 DGEMM_EXEC = './dgemm_test'
 DTRSM_EXEC = './dtrsm_test'
 
+BIG_SIZE   = 5000
+SMALL_SIZE = 10
+
 def print_color(msg, color):
     print('%s%s%s' % (color, msg, END_STR))
 
@@ -45,8 +48,8 @@ def run_dtrsm(m, n, lead_A, lead_B):
     return float(result)
 
 def get_sizes(nb=3):
-    prod = random.randint(1, 5000**nb)
-    size = int(prod**(1/nb))
+    base_size = random.choice([BIG_SIZE, SMALL_SIZE])
+    size = random.randint(int(base_size*0.9), int(base_size*1.1))
     return (size,)*nb
 
 def get_dim(size):
