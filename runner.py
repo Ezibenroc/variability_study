@@ -3,7 +3,11 @@ import sys
 import csv
 import random
 import functools
-from subprocess import Popen, PIPE, DEVNULL
+from subprocess import Popen, PIPE
+try:
+    from subprocess import DEVNULL
+except ImportError:
+    DEVNULL = open('/dev/null', 'w')
 
 BLUE_STR = '\033[1m\033[94m'
 GREEN_STR = '\033[1m\033[92m'
@@ -36,12 +40,16 @@ def run_command(args):
         error('with command: %s' % ' '.join(args))
     return output[0]
 
-def run_dgemm(m, n, k, lead_A, lead_B, lead_C):
+def run_dgemm(sizes, dimensions):
+    m, n, k = sizes
+    lead_A, lead_B, lead_C = dimensions
     result = run_command([DGEMM_EXEC] + [str(n) for n in [
         m, n, k, lead_A, lead_B, lead_C]])
     return float(result)
 
-def run_dtrsm(m, n, lead_A, lead_B):
+def run_dtrsm(sizes, dimensions):
+    m, n = sizes
+    lead_A, lead_B = dimensions
     result = run_command([DTRSM_EXEC] + [str(n) for n in [
         m, n, lead_A, lead_B]])
     return float(result)
@@ -56,11 +64,14 @@ def get_dim(sizes):
 def run_exp_generic(run_func, nb_sizes, csv_writer):
     sizes = get_sizes(nb_sizes)
     leads = get_dim(sizes)
-    time = run_func(*sizes, *leads)
+    time = run_func(sizes, leads)
     size_product = functools.reduce(lambda x,y: x*y, sizes, 1)
     lead_product = functools.reduce(lambda x,y: x*y, leads, 1)
     ratio = lead_product/size_product
-    csv_writer.writerow((time, *sizes, *leads))
+    args = [time]
+    args.extend(sizes)
+    args.extend(leads)
+    csv_writer.writerow(args)
 
 def run_all_dgemm(csv_file, nb_exp):
     with open(csv_file, 'w') as f:
