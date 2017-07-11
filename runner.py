@@ -91,7 +91,7 @@ def run_all_dtrsm(csv_file, nb_exp, max_size):
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
     if lib == 'mkl':
-        run_command(['icc', '-DUSE_MKL', c_filename, '-O3', '-o', exec_filename])
+        run_command(['icc', '-DUSE_MKL', c_filename, '-mkl', '-O3', '-o', exec_filename])
     elif lib == 'atlas':
         run_command(['gcc', c_filename, '-lblas', '-latlas', '-O3', '-o', exec_filename])
     else:
