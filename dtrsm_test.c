@@ -1,10 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <cblas.h>
 #include <time.h>
 #include <sys/time.h>
 #include <assert.h>
 #include <string.h>
+#ifdef USE_MKL
+#include <mkl.h>
+#else
+#include <cblas.h>
+#endif
 
 void syntax(char *exec_name) {
     fprintf(stderr, "Syntax: %s <m> <n> <lead_A> <lead_B>\n", exec_name);

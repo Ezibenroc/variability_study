@@ -1,10 +1,14 @@
 #include <stdlib.h>
 #include <stdio.h>
-#include <cblas.h>
 #include <time.h>
 #include <sys/time.h>
 #include <assert.h>
 #include <string.h>
+#ifdef USE_MKL
+#include <mkl.h>
+#else
+#include <cblas.h>
+#endif
 
 // Warning: we use dgemm in Column-major mode, to be like HPL.
 // It is different than the implementation of 2D arrays in C (which are row-major).
@@ -56,7 +60,7 @@ int main(int argc, char* argv[])
     double *C = allocate_matrix(m, n, lead_C);
 
 	double alpha = 1.;
-	double beta = 0.;
+	double beta = 1.;
 
     struct timeval before = {};
     struct timeval after = {};

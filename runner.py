@@ -3,6 +3,7 @@ import sys
 import csv
 import random
 import functools
+import argparse
 from subprocess import Popen, PIPE
 try:
     from subprocess import DEVNULL
@@ -16,8 +17,6 @@ END_STR = '\033[0m'
 
 DGEMM_EXEC = './dgemm_test'
 DTRSM_EXEC = './dtrsm_test'
-
-BIG_SIZE = 5000
 
 def print_color(msg, color):
     print('%s%s%s' % (color, msg, END_STR))
@@ -54,15 +53,15 @@ def run_dtrsm(sizes, dimensions):
         m, n, lead_A, lead_B]])
     return float(result)
 
-def get_sizes(nb=3):
-    return tuple(random.randint(1, BIG_SIZE) for _ in range(nb))
+def get_sizes(nb, max_size):
+    return tuple(random.randint(1, max_size) for _ in range(nb))
     return (size,)*nb
 
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
 
-def run_exp_generic(run_func, nb_sizes, csv_writer):
-    sizes = get_sizes(nb_sizes)
+def run_exp_generic(run_func, nb_sizes, max_size, csv_writer):
+    sizes = get_sizes(nb_sizes, max_size)
     leads = get_dim(sizes)
     time = run_func(sizes, leads)
     size_product = functools.reduce(lambda x,y: x*y, sizes, 1)
@@ -73,41 +72,52 @@ def run_exp_generic(run_func, nb_sizes, csv_writer):
     args.extend(leads)
     csv_writer.writerow(args)
 
-def run_all_dgemm(csv_file, nb_exp):
+def run_all_dgemm(csv_file, nb_exp, max_size):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, csv_writer)
+            run_exp_generic(run_dgemm, 3, max_size, csv_writer)
 
-def run_all_dtrsm(csv_file, nb_exp):
+def run_all_dtrsm(csv_file, nb_exp, max_size):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, csv_writer)
+            run_exp_generic(run_dtrsm, 2, max_size, csv_writer)
 
-def compile_generic(exec_filename):
+def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
-    run_command(['gcc', c_filename, '-lblas', '-latlas', '-O3', '-o', exec_filename])
+    if lib == 'mkl':
+        run_command(['icc', '-DUSE_MKL', c_filename, '-O3', '-o', exec_filename])
+    elif lib == 'atlas':
+        run_command(['gcc', c_filename, '-lblas', '-latlas', '-O3', '-o', exec_filename])
+    else:
+        assert False
 
 if __name__ == '__main__':
-    if len(sys.argv) != 3:
-        error('Syntax: %s <nb_args> <csv_file>' % sys.argv[0])
-    try:
-        nb_exp = int(sys.argv[1])
-        assert nb_exp > 0
-    except (ValueError, AssertionError):
-        error('Argument nb_args must be a positive integer.')
-    compile_generic(DGEMM_EXEC)
-    compile_generic(DTRSM_EXEC)
-    base_filename = sys.argv[2]
+    parser = argparse.ArgumentParser(
+            description='Experiment runner')
+    parser.add_argument('-n', '--nb_runs', type=int,
+            default=30, help='Number of experiments to perform.')
+    parser.add_argument('-s', '--max_size', type=int,
+            default=5000, help='Maximal size of the matrices.')
+    required_named = parser.add_argument_group('required named arguments')
+    required_named.add_argument('--csv_file', type = str,
+            required=True, help='Path of the CSV file for the results.')
+    required_named.add_argument('--lib', type = str,
+            required=True, help='Library to use.',
+            choices = ['mkl', 'atlas'])
+    args = parser.parse_args()
+    compile_generic(DGEMM_EXEC, args.lib)
+    compile_generic(DTRSM_EXEC, args.lib)
+    base_filename = args.csv_file
     assert base_filename[-4:] == '.csv'
     dgemm_filename = base_filename[:-4] + '_dgemm.csv'
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     print("### DGEMM ###")
-    run_all_dgemm(dgemm_filename, nb_exp)
+    run_all_dgemm(dgemm_filename, args.nb_runs, args.max_size)
     print("### DTRSM ###")
-    run_all_dtrsm(dtrsm_filename, nb_exp)
+    run_all_dtrsm(dtrsm_filename, args.nb_runs, args.max_size)
