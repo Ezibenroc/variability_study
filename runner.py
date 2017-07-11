@@ -61,23 +61,25 @@ def get_sizes(nb, max_size):
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
 
-def run_exp_generic(run_func, nb_sizes, max_size, csv_writer, test_offloading):
-    sizes = get_sizes(nb_sizes, max_size)
-    leads = get_dim(sizes)
-    if test_offloading:
-        offloading = random.choice([True, False])
-    else:
-        offloading = False
+def do_run(run_func, sizes, leads, csv_writer, offloading):
     os.environ['MKL_MIC_ENABLE'] = str(int(offloading))
     time = run_func(sizes, leads)
-    size_product = functools.reduce(lambda x,y: x*y, sizes, 1)
-    lead_product = functools.reduce(lambda x,y: x*y, leads, 1)
-    ratio = lead_product/size_product
     args = [time]
     args.extend(sizes)
     args.extend(leads)
     args.append(offloading)
     csv_writer.writerow(args)
+
+def run_exp_generic(run_func, nb_sizes, max_size, csv_writer, test_offloading):
+    sizes = get_sizes(nb_sizes, max_size)
+    leads = get_dim(sizes)
+    if test_offloading:
+        offloading_values = [True, False]
+        random.shuffle(offloading_values)
+    else:
+        offloading_values = [False]
+    for offloading in offloading_values:
+        do_run(run_func, sizes, leads, csv_writer, offloading)
 
 def run_all_dgemm(csv_file, nb_exp, max_size, test_offloading):
     with open(csv_file, 'w') as f:
