@@ -19,6 +19,8 @@ END_STR = '\033[0m'
 DGEMM_EXEC = './dgemm_test'
 DTRSM_EXEC = './dtrsm_test'
 
+CONSTANT_VALUE = 1024
+
 def print_color(msg, color):
     print('%s%s%s' % (color, msg, END_STR))
 
@@ -54,9 +56,14 @@ def run_dtrsm(sizes, dimensions):
         m, n, lead_A, lead_B]])
     return float(result)
 
-def get_sizes(nb, max_size):
-    return tuple(random.randint(1, max_size) for _ in range(nb))
-    return (size,)*nb
+def get_sizes(nb, max_size, hpl):
+    if hpl:
+        size = random.randint(1, max_size)
+        sizes = [size]*nb
+        sizes[-1] = CONSTANT_VALUE
+        return tuple(sizes)
+    else:
+        return tuple(random.randint(1, max_size) for _ in range(nb))
 
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
@@ -70,8 +77,8 @@ def do_run(run_func, sizes, leads, csv_writer, offloading):
     args.append(offloading)
     csv_writer.writerow(args)
 
-def run_exp_generic(run_func, nb_sizes, max_size, csv_writer, test_offloading):
-    sizes = get_sizes(nb_sizes, max_size)
+def run_exp_generic(run_func, nb_sizes, max_size, csv_writer, test_offloading, hpl):
+    sizes = get_sizes(nb_sizes, max_size, hpl)
     leads = get_dim(sizes)
     if test_offloading:
         offloading_values = [True, False]
@@ -81,21 +88,21 @@ def run_exp_generic(run_func, nb_sizes, max_size, csv_writer, test_offloading):
     for offloading in offloading_values:
         do_run(run_func, sizes, leads, csv_writer, offloading)
 
-def run_all_dgemm(csv_file, nb_exp, max_size, test_offloading):
+def run_all_dgemm(csv_file, nb_exp, max_size, test_offloading, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, max_size, csv_writer, test_offloading)
+            run_exp_generic(run_dgemm, 3, max_size, csv_writer, test_offloading, hpl)
 
-def run_all_dtrsm(csv_file, nb_exp, max_size, test_offloading):
+def run_all_dtrsm(csv_file, nb_exp, max_size, test_offloading, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, max_size, csv_writer, test_offloading)
+            run_exp_generic(run_dtrsm, 2, max_size, csv_writer, test_offloading, hpl)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -113,6 +120,8 @@ if __name__ == '__main__':
             default=30, help='Number of experiments to perform.')
     parser.add_argument('-s', '--max_size', type=int,
             default=5000, help='Maximal size of the matrices.')
+    parser.add_argument('--hpl', action='store_true',
+            help='Sample the sizes in the same way than in HPL.')
     parser.add_argument('--test_offloading', action='store_true',
             help='Randomly enable/disable the automatic offloading to the Xeon Phi (note: require MKL library).')
     required_named = parser.add_argument_group('required named arguments')
@@ -132,6 +141,6 @@ if __name__ == '__main__':
     dgemm_filename = base_filename[:-4] + '_dgemm.csv'
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     print("### DGEMM ###")
-    run_all_dgemm(dgemm_filename, args.nb_runs, args.max_size, args.test_offloading)
+    run_all_dgemm(dgemm_filename, args.nb_runs, args.max_size, args.test_offloading, args.hpl)
     print("### DTRSM ###")
-    run_all_dtrsm(dtrsm_filename, args.nb_runs, args.max_size, args.test_offloading)
+    run_all_dtrsm(dtrsm_filename, args.nb_runs, args.max_size, args.test_offloading, args.hpl)
