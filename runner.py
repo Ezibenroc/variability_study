@@ -61,7 +61,11 @@ def get_sizes(nb, size_range, hpl):
     if hpl:
         size = random.randint(size_range.min, size_range.max)
         sizes = [size]*nb
-        sizes[-1] = CONSTANT_VALUE
+        if nb == 3: # dgemm
+            sizes[2] = CONSTANT_VALUE
+        else: # dtrsm
+            assert nb == 2
+            sizes[0] = CONSTANT_VALUE
         return tuple(sizes)
     else:
         return tuple(random.randint(1, max_size) for _ in range(nb))
