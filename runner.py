@@ -78,32 +78,29 @@ def do_run(run_func, sizes, leads, csv_writer, offloading):
     args.append(offloading)
     csv_writer.writerow(args)
 
-def run_exp_generic(run_func, nb_sizes, size_range, csv_writer, test_offloading, hpl):
+def run_exp_generic(run_func, nb_sizes, size_range, csv_writer, offloading_mode, hpl):
     sizes = get_sizes(nb_sizes, size_range, hpl)
     leads = get_dim(sizes)
-    if test_offloading:
-        offloading_values = [True, False]
-        random.shuffle(offloading_values)
-    else:
-        offloading_values = [False]
+    offloading_values = list(offloading_mode)
+    random.shuffle(offloading_values)
     for offloading in offloading_values:
         do_run(run_func, sizes, leads, csv_writer, offloading)
 
-def run_all_dgemm(csv_file, nb_exp, size_range, test_offloading, hpl):
+def run_all_dgemm(csv_file, nb_exp, size_range, offloading_mode, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, size_range, csv_writer, test_offloading, hpl)
+            run_exp_generic(run_dgemm, 3, size_range, csv_writer, offloading_mode, hpl)
 
-def run_all_dtrsm(csv_file, nb_exp, size_range, test_offloading, hpl):
+def run_all_dtrsm(csv_file, nb_exp, size_range, offloading_mode, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, size_range, csv_writer, test_offloading, hpl)
+            run_exp_generic(run_dtrsm, 2, size_range, csv_writer, offloading_mode, hpl)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -128,7 +125,13 @@ if __name__ == '__main__':
     parser.add_argument('--hpl', action='store_true',
             help='Sample the sizes in the same way than in HPL.')
     parser.add_argument('--test_offloading', action='store_true',
-            help='Randomly enable/disable the automatic offloading to the Xeon Phi (note: require MKL library).')
+            help='Do tests with the automatic offloading to the Xeon Phi (note: require MKL library).')
+    parser.add_argument('--test_no_offloading', action='store_true',
+            help='Do tests without the automatic offloading to the Xeon Phi (note: require MKL library).')
+    parser.add_argument('--dgemm', action='store_true',
+            help='Test the dgemm function.')
+    parser.add_argument('--dtrsm', action='store_true',
+            help='Test the dtrsm function.')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--csv_file', type = str,
             required=True, help='Path of the CSV file for the results.')
@@ -136,8 +139,21 @@ if __name__ == '__main__':
             required=True, help='Library to use.',
             choices = ['mkl', 'atlas'])
     args = parser.parse_args()
-    if args.test_offloading and args.lib != 'mkl':
-        sys.stderr.write('Error: option --test_ofloading requires to use the option --lib=mkl')
+    if (args.test_offloading or args.test_no_offloading) and args.lib != 'mkl':
+        sys.stderr.write('Error: option --test_[no_]ofloading requires to use the option --lib=mkl.\n')
+        sys.exit(1)
+    if args.lib == 'mkl' and not (args.test_offloading or args.test_no_offloading):
+        sys.stderr.write('Error: please provide at least one offloading mode to test (example: "--test_offloading").\n')
+        sys.exit(1)
+    offloading_mode = []
+    if args.test_offloading:
+        offloading_mode.append(True)
+    if args.test_no_offloading:
+        offloading_mode.append(False)
+    if args.lib != 'mkl':
+        offloading_mode = [False]
+    if not (args.dgemm or args.dtrsm):
+        sys.stderr.write('Error: please provide at least one function to test (example: "--dgemm").\n')
         sys.exit(1)
     compile_generic(DGEMM_EXEC, args.lib)
     compile_generic(DTRSM_EXEC, args.lib)
@@ -145,7 +161,9 @@ if __name__ == '__main__':
     assert base_filename[-4:] == '.csv'
     dgemm_filename = base_filename[:-4] + '_dgemm.csv'
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
-    print("### DGEMM ###")
-    run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.test_offloading, args.hpl)
-    print("### DTRSM ###")
-    run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.test_offloading, args.hpl)
+    if args.dgemm:
+        print("### DGEMM ###")
+        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, offloading_mode, args.hpl)
+    if args.dtrsm:
+        print("### DTRSM ###")
+        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, offloading_mode, args.hpl)
