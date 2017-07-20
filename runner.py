@@ -68,7 +68,7 @@ def get_sizes(nb, size_range, hpl):
             sizes[0] = CONSTANT_VALUE
         return tuple(sizes)
     else:
-        return tuple(random.randint(1, max_size) for _ in range(nb))
+        return tuple(random.randint(size_range.min, size_range.max) for _ in range(nb))
 
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
