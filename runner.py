@@ -5,6 +5,7 @@ import random
 import functools
 import argparse
 import os
+from collections import namedtuple
 from subprocess import Popen, PIPE
 try:
     from subprocess import DEVNULL
@@ -56,9 +57,9 @@ def run_dtrsm(sizes, dimensions):
         m, n, lead_A, lead_B]])
     return float(result)
 
-def get_sizes(nb, max_size, hpl):
+def get_sizes(nb, size_range, hpl):
     if hpl:
-        size = random.randint(1, max_size)
+        size = random.randint(size_range.min, size_range.max)
         sizes = [size]*nb
         sizes[-1] = CONSTANT_VALUE
         return tuple(sizes)
@@ -77,8 +78,8 @@ def do_run(run_func, sizes, leads, csv_writer, offloading):
     args.append(offloading)
     csv_writer.writerow(args)
 
-def run_exp_generic(run_func, nb_sizes, max_size, csv_writer, test_offloading, hpl):
-    sizes = get_sizes(nb_sizes, max_size, hpl)
+def run_exp_generic(run_func, nb_sizes, size_range, csv_writer, test_offloading, hpl):
+    sizes = get_sizes(nb_sizes, size_range, hpl)
     leads = get_dim(sizes)
     if test_offloading:
         offloading_values = [True, False]
@@ -88,21 +89,21 @@ def run_exp_generic(run_func, nb_sizes, max_size, csv_writer, test_offloading, h
     for offloading in offloading_values:
         do_run(run_func, sizes, leads, csv_writer, offloading)
 
-def run_all_dgemm(csv_file, nb_exp, max_size, test_offloading, hpl):
+def run_all_dgemm(csv_file, nb_exp, size_range, test_offloading, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, max_size, csv_writer, test_offloading, hpl)
+            run_exp_generic(run_dgemm, 3, size_range, csv_writer, test_offloading, hpl)
 
-def run_all_dtrsm(csv_file, nb_exp, max_size, test_offloading, hpl):
+def run_all_dtrsm(csv_file, nb_exp, size_range, test_offloading, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, max_size, csv_writer, test_offloading, hpl)
+            run_exp_generic(run_dtrsm, 2, size_range, csv_writer, test_offloading, hpl)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -113,13 +114,17 @@ def compile_generic(exec_filename, lib):
     else:
         assert False
 
+def size_parser(string):
+    min_v, max_v = (int(n) for n in string.split(','))
+    return namedtuple('size_range', ['min', 'max'])(min_v, max_v)
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
             description='Experiment runner')
     parser.add_argument('-n', '--nb_runs', type=int,
             default=30, help='Number of experiments to perform.')
-    parser.add_argument('-s', '--max_size', type=int,
-            default=5000, help='Maximal size of the matrices.')
+    parser.add_argument('-s', '--size_range', type=size_parser,
+            default=(1, 5000), help='Minimal and maximal size of the matrices (example: "1,5000").')
     parser.add_argument('--hpl', action='store_true',
             help='Sample the sizes in the same way than in HPL.')
     parser.add_argument('--test_offloading', action='store_true',
@@ -141,6 +146,6 @@ if __name__ == '__main__':
     dgemm_filename = base_filename[:-4] + '_dgemm.csv'
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     print("### DGEMM ###")
-    run_all_dgemm(dgemm_filename, args.nb_runs, args.max_size, args.test_offloading, args.hpl)
+    run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.test_offloading, args.hpl)
     print("### DTRSM ###")
-    run_all_dtrsm(dtrsm_filename, args.nb_runs, args.max_size, args.test_offloading, args.hpl)
+    run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.test_offloading, args.hpl)
