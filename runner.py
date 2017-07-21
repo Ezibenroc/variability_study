@@ -57,8 +57,9 @@ def run_dtrsm(sizes, dimensions):
         m, n, lead_A, lead_B]])
     return float(result)
 
-def get_sizes(nb, size_range, hpl):
+def get_sizes(nb, size_range, big_size_range, hpl):
     if hpl:
+        assert size_range == big_size_range
         size = random.randint(size_range.min, size_range.max)
         sizes = [size]*nb
         if nb == 3: # dgemm
@@ -68,7 +69,10 @@ def get_sizes(nb, size_range, hpl):
             sizes[0] = CONSTANT_VALUE
         return tuple(sizes)
     else:
-        return tuple(random.randint(size_range.min, size_range.max) for _ in range(nb))
+        sizes = [random.randint(size_range.min, size_range.max) for _ in range(nb)]
+        i = random.choice([0, 1])
+        sizes[i] = random.randint(big_size_range.min, big_size_range.max)
+        return tuple(sizes)
 
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
@@ -82,29 +86,29 @@ def do_run(run_func, sizes, leads, csv_writer, offloading):
     args.append(offloading)
     csv_writer.writerow(args)
 
-def run_exp_generic(run_func, nb_sizes, size_range, csv_writer, offloading_mode, hpl):
-    sizes = get_sizes(nb_sizes, size_range, hpl)
+def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl):
+    sizes = get_sizes(nb_sizes, size_range, big_size_range, hpl)
     leads = get_dim(sizes)
     offloading_values = list(offloading_mode)
     random.shuffle(offloading_values)
     for offloading in offloading_values:
         do_run(run_func, sizes, leads, csv_writer, offloading)
 
-def run_all_dgemm(csv_file, nb_exp, size_range, offloading_mode, hpl):
+def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, size_range, csv_writer, offloading_mode, hpl)
+            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl)
 
-def run_all_dtrsm(csv_file, nb_exp, size_range, offloading_mode, hpl):
+def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, size_range, csv_writer, offloading_mode, hpl)
+            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -125,7 +129,10 @@ if __name__ == '__main__':
     parser.add_argument('-n', '--nb_runs', type=int,
             default=30, help='Number of experiments to perform.')
     parser.add_argument('-s', '--size_range', type=size_parser,
-            default=(1, 5000), help='Minimal and maximal size of the matrices (example: "1,5000").')
+            default=(1, 5000), help='Minimal and maximal values of the sizes of the matrices (example: "1,5000").')
+    parser.add_argument('-b', '--big_size_range', type=size_parser,
+            default=None, help='Minimal and maximal values of *one* of the sizes of the matrices (example: "1,5000").\
+            The other sizes will remain in the "normal" size range.')
     parser.add_argument('--hpl', action='store_true',
             help='Sample the sizes in the same way than in HPL.')
     parser.add_argument('--test_offloading', action='store_true',
@@ -159,6 +166,8 @@ if __name__ == '__main__':
     if not (args.dgemm or args.dtrsm):
         sys.stderr.write('Error: please provide at least one function to test (example: "--dgemm").\n')
         sys.exit(1)
+    if args.big_size_range is None:
+        args.big_size_range = args.size_range
     compile_generic(DGEMM_EXEC, args.lib)
     compile_generic(DTRSM_EXEC, args.lib)
     base_filename = args.csv_file
@@ -167,7 +176,7 @@ if __name__ == '__main__':
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     if args.dgemm:
         print("### DGEMM ###")
-        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, offloading_mode, args.hpl)
+        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl)
     if args.dtrsm:
         print("### DTRSM ###")
-        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, offloading_mode, args.hpl)
+        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl)
