@@ -77,38 +77,39 @@ def get_sizes(nb, size_range, big_size_range, hpl):
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
 
-def do_run(run_func, sizes, leads, csv_writer, offloading):
+def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat):
     os.environ['MKL_MIC_ENABLE'] = str(int(offloading))
-    time = run_func(sizes, leads)
-    args = [time]
-    args.extend(sizes)
-    args.extend(leads)
-    args.append(offloading)
-    csv_writer.writerow(args)
+    for _ in range(nb_repeat):
+        time = run_func(sizes, leads)
+        args = [time]
+        args.extend(sizes)
+        args.extend(leads)
+        args.append(offloading)
+        csv_writer.writerow(args)
 
-def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl):
+def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat):
     sizes = get_sizes(nb_sizes, size_range, big_size_range, hpl)
     leads = get_dim(sizes)
     offloading_values = list(offloading_mode)
     random.shuffle(offloading_values)
     for offloading in offloading_values:
-        do_run(run_func, sizes, leads, csv_writer, offloading)
+        do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat)
 
-def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl):
+def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl)
+            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat)
 
-def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl):
+def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl)
+            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -128,6 +129,8 @@ if __name__ == '__main__':
             description='Experiment runner')
     parser.add_argument('-n', '--nb_runs', type=int,
             default=30, help='Number of experiments to perform.')
+    parser.add_argument('-r', '--nb_repeat', type=int,
+            default=3, help='Number of repetition of each experiment.')
     parser.add_argument('-s', '--size_range', type=size_parser,
             default=(1, 5000), help='Minimal and maximal values of the sizes of the matrices (example: "1,5000").')
     parser.add_argument('-b', '--big_size_range', type=size_parser,
@@ -176,7 +179,7 @@ if __name__ == '__main__':
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     if args.dgemm:
         print("### DGEMM ###")
-        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl)
+        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat)
     if args.dtrsm:
         print("### DTRSM ###")
-        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl)
+        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat)
