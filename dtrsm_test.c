@@ -53,8 +53,11 @@ int main(int argc, char* argv[])
     struct timeval before = {};
     struct timeval after = {};
 
+    // Warmup
+    cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasNoTrans, CblasUnit, m, n, alpha, A, lead_A, B, lead_B);
+
     gettimeofday(&before, NULL);
-	cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasNoTrans, CblasUnit, m, n, alpha, A, lead_A, B, lead_B);
+    cblas_dtrsm(CblasColMajor, CblasRight, CblasLower, CblasNoTrans, CblasUnit, m, n, alpha, A, lead_A, B, lead_B);
     gettimeofday(&after, NULL);
 
     double total_time = (after.tv_sec-before.tv_sec) + 1e-6*(after.tv_usec-before.tv_usec);
