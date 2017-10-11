@@ -116,7 +116,9 @@ def compile_generic(exec_filename, lib):
     if lib == 'mkl':
         run_command(['icc', '-DUSE_MKL', c_filename, '-mkl', '-O3', '-o', exec_filename])
     elif lib == 'atlas':
-        run_command(['gcc', c_filename, '-lblas', '-latlas', '-O3', '-o', exec_filename])
+        run_command(['gcc', c_filename, '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename])
+    elif lib == 'openblas':
+        run_command(['gcc', c_filename, '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename])
     else:
         assert False
 
@@ -151,7 +153,7 @@ if __name__ == '__main__':
             required=True, help='Path of the CSV file for the results.')
     required_named.add_argument('--lib', type = str,
             required=True, help='Library to use.',
-            choices = ['mkl', 'atlas'])
+            choices = ['mkl', 'atlas', 'openblas'])
     args = parser.parse_args()
     if (args.test_offloading or args.test_no_offloading) and args.lib != 'mkl':
         sys.stderr.write('Error: option --test_[no_]ofloading requires to use the option --lib=mkl.\n')
