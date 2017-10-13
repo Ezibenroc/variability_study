@@ -5,6 +5,7 @@ import random
 import functools
 import argparse
 import os
+import socket
 from collections import namedtuple
 from subprocess import Popen, PIPE
 try:
@@ -85,6 +86,7 @@ def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat):
         args.extend(sizes)
         args.extend(leads)
         args.append(offloading)
+        args.append(socket.gethostname())
         csv_writer.writerow(args)
 
 def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat):
@@ -98,7 +100,7 @@ def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, 
 def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading'))
+        csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading','hostname'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
             run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat)
@@ -106,7 +108,7 @@ def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode,
 def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading'))
+        csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading','hostname'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
             run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat)
