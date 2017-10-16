@@ -15,13 +15,13 @@ function run_command {
     fi
 }
 
-wget https://github.com/xianyi/OpenBLAS/archive/v0.2.20.zip -O openblas.zip
+[ -f openblas.zip ] || wget https://github.com/xianyi/OpenBLAS/archive/v0.2.20.zip -O openblas.zip
+rm run_*.log
 for host in $*; do {	
-    rm -f "run_*.log"
-    run_command ${host} 'rm -rf scripts.zip scripts openblas.zip OpenBLAS*'
+    run_command ${host} 'rm -rf scripts.zip scripts openblas.zip OpenBLAS* /usr/lib/openblas-base'
     run_command ${host} 'cp /home/tocornebize/openblas.zip .'
     run_command ${host} 'unzip openblas.zip'
-    run_command ${host} 'cd OpenBLAS* && make -j 8 && make install PREFIX=/usr'
+    run_command ${host} 'cd OpenBLAS* && make -j 8 && make install PREFIX=/usr && mkdir /usr/lib/openblas-base/ && ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so'
     run_command ${host} 'cp /home/tocornebize/scripts.zip .'
     run_command ${host} 'unzip scripts.zip'
     run_command ${host} 'cd scripts/cblas_tests && python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1'
