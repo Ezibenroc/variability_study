@@ -89,7 +89,8 @@ def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat):
         args.append(socket.gethostname())
         csv_writer.writerow(args)
 
-def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat):
+def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads):
+    os.environ['OMP_NUM_THREADS'] = str(nb_threads)
     sizes = get_sizes(nb_sizes, size_range, big_size_range, hpl)
     leads = get_dim(sizes)
     offloading_values = list(offloading_mode)
@@ -97,21 +98,21 @@ def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, 
     for offloading in offloading_values:
         do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat)
 
-def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat):
+def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading','hostname'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat)
+            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads)
 
-def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat):
+def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading','hostname'))
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat)
+            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -150,6 +151,8 @@ if __name__ == '__main__':
             help='Test the dgemm function.')
     parser.add_argument('--dtrsm', action='store_true',
             help='Test the dtrsm function.')
+    parser.add_argument('-np', '--nb_threads', type=int,
+            default=1, help='Number of threads used to perform the operation (may not be supported by all BLAS libraries).')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--csv_file', type = str,
             required=True, help='Path of the CSV file for the results.')
@@ -183,7 +186,7 @@ if __name__ == '__main__':
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     if args.dgemm:
         print("### DGEMM ###")
-        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat)
+        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads)
     if args.dtrsm:
         print("### DTRSM ###")
-        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat)
+        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads)
