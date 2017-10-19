@@ -11,6 +11,7 @@ from collections import namedtuple
 from subprocess import Popen, PIPE
 import psutil
 import time
+import re
 try:
     from subprocess import DEVNULL
 except ImportError:
@@ -43,7 +44,9 @@ def error(msg):
     sys.exit(1)
 
 def parse_stat_line(line):
-    return line.strip().split('\t')
+    line = re.split('\s', line.strip())
+    line = [w for w in line if w != '']
+    return line
 
 def parse_stat(output):
     output = output.decode('utf-8')

@@ -20,7 +20,7 @@ rm run_*.log
 
 for host in $*; do {	
     run_command ${host} 'cd scripts/cblas_tests && python3 ./runner.py --csv_file /tmp/results_`hostname`.csv --lib openblas --dgemm -s 1024,1024 -n 50 -r 1 -np $(nproc --all) --stat'
-    scp ${host}:/tmp/results\*.csv .
+    scp root@${host}:/tmp/results\*.csv .
 }&
 done
 wait
