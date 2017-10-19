@@ -26,6 +26,7 @@ for host in $*; do {
     run_command ${host} 'cd OpenBLAS* && make -j 8 && make install PREFIX=/usr && mkdir /usr/lib/openblas-base/ && ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so'
     run_command ${host} 'unzip scripts.zip'
     run_command ${host} 'wget https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && pip3 install psutil'
+    run_command ${host} 'cd scripts/cblas_tests/intercoolr && make'
     run_command ${host} 'cd scripts/cblas_tests && python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1 --stat'
     echo "DONE for ${host}"
 }&

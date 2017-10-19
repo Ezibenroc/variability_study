@@ -29,6 +29,7 @@ CONSTANT_VALUE = 1024
 
 EXP_HOSTNAME = socket.gethostname()
 EXP_DATE = time.strftime("%Y/%m/%d")
+INTERCOOLR_FILE = '/tmp/intercooler.log'
 
 def print_color(msg, color):
     print('%s%s%s' % (color, msg, END_STR))
@@ -48,6 +49,15 @@ def parse_stat_line(line):
     line = [w for w in line if w != '']
     return line
 
+def get_intercoolr_output():
+    reg = re.compile('# ENERGY=')
+    with open(INTERCOOLR_FILE) as f:
+        for line in f:
+            m = reg.match(line)
+            if m is not None:
+                return float(line[m.end():])
+    assert False
+
 def parse_stat(output):
     output = output.decode('utf-8')
     lines = output.split('\n')
@@ -58,7 +68,7 @@ def parse_stat(output):
 
 def run_command(args, get_stat=False):
     if get_stat:
-        args = ['turbostat'] + args
+        args = ['intercoolr/etrace2', '-o', INTERCOOLR_FILE, 'turbostat'] + args
     print_blue('%s' % ' '.join(args))
     process = Popen(args, stdout=PIPE, stderr=PIPE)
     output = process.communicate()
@@ -126,12 +136,13 @@ def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat, get_stat):
             args.extend([min(stat), max(stat), mean(stat)])
             temperatures = get_cpu_temp()
             args.extend([min(temperatures), max(temperatures), mean(temperatures)])
+            args.append(get_intercoolr_output())
         csv_writer.writerow(args)
 
 def csv_base_header(get_stat):
     header = ['automatic_offloading', 'hostname', 'date']
     if get_stat:
-        header.extend(['min_freq', 'max_freq', 'mean_freq', 'min_temp', 'max_temp', 'mean_temp'])
+        header.extend(['min_freq', 'max_freq', 'mean_freq', 'min_temp', 'max_temp', 'mean_temp', 'energy'])
     return header
 
 def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat):
