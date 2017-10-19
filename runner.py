@@ -6,8 +6,11 @@ import functools
 import argparse
 import os
 import socket
+from multiprocessing import cpu_count
 from collections import namedtuple
 from subprocess import Popen, PIPE
+import psutil
+import time
 try:
     from subprocess import DEVNULL
 except ImportError:
@@ -23,6 +26,9 @@ DTRSM_EXEC = './dtrsm_test'
 
 CONSTANT_VALUE = 1024
 
+EXP_HOSTNAME = socket.gethostname()
+EXP_DATE = time.strftime("%Y/%m/%d")
+
 def print_color(msg, color):
     print('%s%s%s' % (color, msg, END_STR))
 
@@ -36,27 +42,44 @@ def error(msg):
     sys.stderr.write('%sERROR: %s%s\n' % (RED_STR, msg, END_STR))
     sys.exit(1)
 
-def run_command(args):
+def parse_stat_line(line):
+    return line.strip().split('\t')
+
+def parse_stat(output):
+    output = output.decode('utf-8')
+    lines = output.split('\n')
+    assert parse_stat_line(lines[1]) == ['CPU', 'Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz']
+    lines = [parse_stat_line(l) for l in lines[3:-1]]
+    assert len(lines) == cpu_count()
+    return [int(l[1]) for l in lines]
+
+def run_command(args, get_stat=False):
+    if get_stat:
+        args = ['turbostat'] + args
     print_blue('%s' % ' '.join(args))
-    process = Popen(args, stdout=PIPE)
+    process = Popen(args, stdout=PIPE, stderr=PIPE)
     output = process.communicate()
     if process.wait() != 0:
         error('with command: %s' % ' '.join(args))
-    return output[0]
+    if get_stat:
+        stat = parse_stat(output[1])
+    else:
+        stat = None
+    return output[0], stat
 
-def run_dgemm(sizes, dimensions):
+def run_dgemm(sizes, dimensions, get_stat):
     m, n, k = sizes
     lead_A, lead_B, lead_C = dimensions
-    result = run_command([DGEMM_EXEC] + [str(n) for n in [
-        m, n, k, lead_A, lead_B, lead_C]])
-    return float(result)
+    result, stat = run_command([DGEMM_EXEC] + [str(n) for n in [
+        m, n, k, lead_A, lead_B, lead_C]], get_stat)
+    return float(result), stat
 
-def run_dtrsm(sizes, dimensions):
+def run_dtrsm(sizes, dimensions, get_stat):
     m, n = sizes
     lead_A, lead_B = dimensions
-    result = run_command([DTRSM_EXEC] + [str(n) for n in [
-        m, n, lead_A, lead_B]])
-    return float(result)
+    result, stat = run_command([DTRSM_EXEC] + [str(n) for n in [
+        m, n, lead_A, lead_B]], get_stat)
+    return float(result), stat
 
 def get_sizes(nb, size_range, big_size_range, hpl):
     if hpl:
@@ -78,41 +101,62 @@ def get_sizes(nb, size_range, big_size_range, hpl):
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
 
-def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat):
+def mean(l):
+    return sum(l)/len(l)
+
+def get_cpu_temp(): # long and not very precise...
+    temperatures = [temp.current for temp in psutil.sensors_temperatures()['coretemp'] if temp.label.startswith('Core')]
+    assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
+    return temperatures
+
+def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat, get_stat):
     os.environ['MKL_MIC_ENABLE'] = str(int(offloading))
     for _ in range(nb_repeat):
-        time = run_func(sizes, leads)
+        time, stat = run_func(sizes, leads, get_stat)
         args = [time]
         args.extend(sizes)
         args.extend(leads)
         args.append(offloading)
-        args.append(socket.gethostname())
+        args.append(EXP_HOSTNAME)
+        args.append(EXP_DATE)
+        if get_stat:
+            args.extend([min(stat), max(stat), mean(stat)])
+            temperatures = get_cpu_temp()
+            args.extend([min(temperatures), max(temperatures), mean(temperatures)])
         csv_writer.writerow(args)
 
-def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads):
+def csv_base_header(get_stat):
+    header = ['automatic_offloading', 'hostname', 'date']
+    if get_stat:
+        header.extend(['min_freq', 'max_freq', 'mean_freq', 'min_temp', 'max_temp', 'mean_temp'])
+    return header
+
+def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat):
     os.environ['OMP_NUM_THREADS'] = str(nb_threads)
     sizes = get_sizes(nb_sizes, size_range, big_size_range, hpl)
     leads = get_dim(sizes)
     offloading_values = list(offloading_mode)
     random.shuffle(offloading_values)
     for offloading in offloading_values:
-        do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat)
+        do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat, get_stat)
 
-def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads):
+def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads, get_stat):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(('time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C', 'automatic_offloading','hostname'))
+        header = ['time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C'] + csv_base_header(get_stat)
+        csv_writer.writerow(header)
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads)
+            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat)
 
-def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads):
+def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads, get_stat):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
-        csv_writer.writerow(('time', 'm', 'n', 'lead_A', 'lead_B', 'automatic_offloading','hostname'))
+        header = ['time', 'm', 'n', 'lead_A', 'lead_B'] + csv_base_header(get_stat)
+        csv_writer.writerow(header)
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads)
+            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -151,6 +195,8 @@ if __name__ == '__main__':
             help='Test the dgemm function.')
     parser.add_argument('--dtrsm', action='store_true',
             help='Test the dtrsm function.')
+    parser.add_argument('--stat', action='store_true',
+            help='Include some metrics about the system state (CPU frequencies and temperatures).')
     parser.add_argument('-np', '--nb_threads', type=int,
             default=1, help='Number of threads used to perform the operation (may not be supported by all BLAS libraries).')
     required_named = parser.add_argument_group('required named arguments')
@@ -186,7 +232,7 @@ if __name__ == '__main__':
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     if args.dgemm:
         print("### DGEMM ###")
-        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads)
+        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads, args.stat)
     if args.dtrsm:
         print("### DTRSM ###")
-        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads)
+        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads, args.stat)
