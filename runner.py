@@ -64,7 +64,7 @@ def parse_stat(output):
     assert parse_stat_line(lines[1]) == ['CPU', 'Avg_MHz', 'Busy%', 'Bzy_MHz', 'TSC_MHz']
     lines = [parse_stat_line(l) for l in lines[3:-1]]
     assert len(lines) == cpu_count()
-    return [int(l[1]) for l in lines]
+    return [int(l[3]) for l in lines]
 
 def run_command(args, get_stat=False):
     if get_stat:
