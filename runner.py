@@ -66,9 +66,12 @@ def parse_stat(output):
     assert len(lines) == cpu_count()
     return [int(l[3]) for l in lines]
 
-def run_command(args, get_stat=False):
+def run_command(args, get_stat=False, wrapper=None):
     if get_stat:
         args = ['intercoolr/etrace2', '-o', INTERCOOLR_FILE, 'turbostat'] + args
+    if wrapper is not None:
+        wrapper = re.split('\s', wrapper.strip())
+        args = wrapper + args
     print_blue('%s' % ' '.join(args))
     process = Popen(args, stdout=PIPE, stderr=PIPE)
     output = process.communicate()
@@ -80,18 +83,18 @@ def run_command(args, get_stat=False):
         stat = None
     return output[0], stat
 
-def run_dgemm(sizes, dimensions, get_stat):
+def run_dgemm(sizes, dimensions, get_stat, wrapper):
     m, n, k = sizes
     lead_A, lead_B, lead_C = dimensions
     result, stat = run_command([DGEMM_EXEC] + [str(n) for n in [
-        m, n, k, lead_A, lead_B, lead_C]], get_stat)
+        m, n, k, lead_A, lead_B, lead_C]], get_stat, wrapper)
     return float(result), stat
 
-def run_dtrsm(sizes, dimensions, get_stat):
+def run_dtrsm(sizes, dimensions, get_stat, wrapper):
     m, n = sizes
     lead_A, lead_B = dimensions
     result, stat = run_command([DTRSM_EXEC] + [str(n) for n in [
-        m, n, lead_A, lead_B]], get_stat)
+        m, n, lead_A, lead_B]], get_stat, wrapper)
     return float(result), stat
 
 def get_sizes(nb, size_range, big_size_range, hpl):
@@ -122,10 +125,10 @@ def get_cpu_temp(): # long and not very precise...
     assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
     return temperatures
 
-def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat, get_stat):
+def do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat, get_stat, wrapper):
     os.environ['MKL_MIC_ENABLE'] = str(int(offloading))
     for _ in range(nb_repeat):
-        time, stat = run_func(sizes, leads, get_stat)
+        time, stat = run_func(sizes, leads, get_stat, wrapper)
         args = [time]
         args.extend(sizes)
         args.extend(leads)
@@ -145,32 +148,32 @@ def csv_base_header(get_stat):
         header.extend(['min_freq', 'max_freq', 'mean_freq', 'min_temp', 'max_temp', 'mean_temp', 'energy'])
     return header
 
-def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat):
+def run_exp_generic(run_func, nb_sizes, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat, wrapper):
     os.environ['OMP_NUM_THREADS'] = str(nb_threads)
     sizes = get_sizes(nb_sizes, size_range, big_size_range, hpl)
     leads = get_dim(sizes)
     offloading_values = list(offloading_mode)
     random.shuffle(offloading_values)
     for offloading in offloading_values:
-        do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat, get_stat)
+        do_run(run_func, sizes, leads, csv_writer, offloading, nb_repeat, get_stat, wrapper)
 
-def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads, get_stat):
+def run_all_dgemm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads, get_stat, wrapper):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         header = ['time', 'm', 'n', 'k', 'lead_A', 'lead_B', 'lead_C'] + csv_base_header(get_stat)
         csv_writer.writerow(header)
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat)
+            run_exp_generic(run_dgemm, 3, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat, wrapper)
 
-def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads, get_stat):
+def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode, hpl, nb_repeat, nb_threads, get_stat, wrapper):
     with open(csv_file, 'w') as f:
         csv_writer = csv.writer(f)
         header = ['time', 'm', 'n', 'lead_A', 'lead_B'] + csv_base_header(get_stat)
         csv_writer.writerow(header)
         for i in range(nb_exp):
             print('Exp %d/%d' % (i+1, nb_exp))
-            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat)
+            run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat, wrapper)
 
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
@@ -199,6 +202,8 @@ if __name__ == '__main__':
     parser.add_argument('-b', '--big_size_range', type=size_parser,
             default=None, help='Minimal and maximal values of *one* of the sizes of the matrices (example: "1,5000").\
             The other sizes will remain in the "normal" size range.')
+    parser.add_argument('--wrapper', type=str,
+            default=None, help='Command line to use as a wrapper. Example: --wrapper="numactl --physcpubind=0,2,4,6").')
     parser.add_argument('--hpl', action='store_true',
             help='Sample the sizes in the same way than in HPL.')
     parser.add_argument('--test_offloading', action='store_true',
@@ -246,7 +251,7 @@ if __name__ == '__main__':
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
     if args.dgemm:
         print("### DGEMM ###")
-        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads, args.stat)
+        run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads, args.stat, args.wrapper)
     if args.dtrsm:
         print("### DTRSM ###")
-        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads, args.stat)
+        run_all_dtrsm(dtrsm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads, args.stat, args.wrapper)
