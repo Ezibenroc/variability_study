@@ -45,7 +45,8 @@ int main(int argc, char* argv[])
     struct timeval before = {};
     struct timeval after = {};
 
-    for(int i = 0; i < nb_calls; i++) {
+    int i;
+    for(i = 0; i < nb_calls; i++) {
         gettimeofday(&before, NULL);
         cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, size, size, size, alpha, A, size, B, size, beta, C, size);
         gettimeofday(&after, NULL);
