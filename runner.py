@@ -9,7 +9,10 @@ import socket
 from multiprocessing import cpu_count
 from collections import namedtuple
 from subprocess import Popen, PIPE
-import psutil
+try:
+    import psutil
+except ImportError:
+    psutil = None
 import time
 import re
 try:
@@ -249,12 +252,15 @@ if __name__ == '__main__':
         sys.exit(1)
     if args.big_size_range is None:
         args.big_size_range = args.size_range
-    compile_generic(DGEMM_EXEC, args.lib)
-    compile_generic(DTRSM_EXEC, args.lib)
     base_filename = args.csv_file
     assert base_filename[-4:] == '.csv'
     dgemm_filename = base_filename[:-4] + '_dgemm.csv'
     dtrsm_filename = base_filename[:-4] + '_dtrsm.csv'
+    if args.stat and psutil is None:
+        sys.stderr.write('Error: the module psutil is required to use the --stat option.\n')
+        sys.exit(1)
+    compile_generic(DGEMM_EXEC, args.lib)
+    compile_generic(DTRSM_EXEC, args.lib)
     if args.dgemm:
         print("### DGEMM ###")
         run_all_dgemm(dgemm_filename, args.nb_runs, args.size_range, args.big_size_range, offloading_mode, args.hpl, args.nb_repeat, args.nb_threads, args.stat, args.wrapper)
