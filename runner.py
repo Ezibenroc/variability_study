@@ -182,6 +182,8 @@ def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
     lib_to_command = {
         'mkl': ['icc', '-DUSE_MKL', c_filename, '-mkl', '-O3', '-o', exec_filename],
+        'mkl2': ['/opt/intel/bin/icc', '-DUSE_MKL', c_filename, '-I', '/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/include',
+		'/opt/intel/mkl/lib/intel64/libmkl_rt.so', '-O3', '-o', exec_filename], # an ugly command for a non-standard library location
         'atlas': ['gcc', c_filename, '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename],
         'openblas': ['gcc', c_filename, '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename],
     }
@@ -227,7 +229,7 @@ if __name__ == '__main__':
             required=True, help='Path of the CSV file for the results.')
     required_named.add_argument('--lib', type = str,
             required=True, help='Library to use.',
-            choices = ['mkl', 'atlas', 'openblas'])
+            choices = ['mkl', 'mkl2', 'atlas', 'openblas'])
     args = parser.parse_args()
     if (args.test_offloading or args.test_no_offloading) and args.lib != 'mkl':
         sys.stderr.write('Error: option --test_[no_]ofloading requires to use the option --lib=mkl.\n')
