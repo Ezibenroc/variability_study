@@ -175,16 +175,20 @@ def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode,
             print('Exp %d/%d' % (i+1, nb_exp))
             run_exp_generic(run_dtrsm, 2, size_range, big_size_range, csv_writer, offloading_mode, hpl, nb_repeat, nb_threads, get_stat, wrapper)
 
+class LibraryNotFound(Exception):
+    pass
+
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
-    if lib == 'mkl':
-        run_command(['icc', '-DUSE_MKL', c_filename, '-mkl', '-O3', '-o', exec_filename])
-    elif lib == 'atlas':
-        run_command(['gcc', c_filename, '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename])
-    elif lib == 'openblas':
-        run_command(['gcc', c_filename, '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename])
-    else:
-        assert False
+    lib_to_command = {
+        'mkl': ['icc', '-DUSE_MKL', c_filename, '-mkl', '-O3', '-o', exec_filename],
+        'atlas': ['gcc', c_filename, '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename],
+        'openblas': ['gcc', c_filename, '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename],
+    }
+    try:
+        run_command(lib_to_command[lib])
+    except KeyError:
+        raise LibraryNotFound('Library unknown. The possible choices are %s' % list(lib_to_command.keys()))
 
 def size_parser(string):
     min_v, max_v = (int(n) for n in string.split(','))
