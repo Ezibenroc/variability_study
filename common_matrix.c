@@ -23,9 +23,9 @@ void matrix_product(double *A, double *B, double *C, int size) {
         #pragma omp for // collapse(2) // ← doing the j-loop in parallel slow down the execution by a factor 2 (hypothesis: more cache miss)
         for(int i = 0 ; i < size ; i++) {
             for(int j = 0 ; j < size ; j++) {
-                float a = matrix_get(A, size, i, k);
-                float b = matrix_get(B, size, k, j);
-                float c = matrix_get(C, size, i, j);
+                double a = matrix_get(A, size, i, k);
+                double b = matrix_get(B, size, k, j);
+                double c = matrix_get(C, size, i, j);
                 matrix_set(C, size, i, j, c + a*b);
             }
         }
