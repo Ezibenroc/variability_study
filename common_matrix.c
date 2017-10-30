@@ -1,4 +1,3 @@
-#include <stdlib.h>
 #include "common_matrix.h"
 
 #ifdef USE_MKL
@@ -18,14 +17,6 @@
 #endif
 
 
-inline void matrix_set(double *matrix, int size, int i, int j, double value) {
-    matrix[i*size+j] = value;
-}
-
-inline double matrix_get(double *matrix, int size, int i, int j) {
-    return matrix[i*size+j];
-}
-
 void matrix_product(double *A, double *B, double *C, int size) {
 #ifdef USE_NAIVE
     for(int k = 0 ; k < size ; k++) {
@@ -42,6 +33,6 @@ void matrix_product(double *A, double *B, double *C, int size) {
 #else
     double alpha = 1.;
     double beta = 1.;
-    cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, size, size, size, alpha, A, size, B, size, beta, C, size);
+    cblas_dgemm(CblasRowMajor, CblasNoTrans, CblasNoTrans, size, size, size, alpha, A, size, B, size, beta, C, size);
 #endif
 }
