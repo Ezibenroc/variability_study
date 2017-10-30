@@ -184,11 +184,12 @@ class LibraryNotFound(Exception):
 def compile_generic(exec_filename, lib):
     c_filename = exec_filename + '.c'
     lib_to_command = {
-        'mkl': ['icc', '-DUSE_MKL', c_filename, '-mkl', '-O3', '-o', exec_filename],
-        'mkl2': ['/opt/intel/bin/icc', '-DUSE_MKL', c_filename, '-I', '/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/include',
+        'mkl': ['icc', '-DUSE_MKL', c_filename, 'common_matrix.c', '-mkl', '-O3', '-o', exec_filename],
+        'mkl2': ['/opt/intel/bin/icc', '-DUSE_MKL', c_filename, 'common_matrix.c', '-I', '/opt/intel/compilers_and_libraries_2017.0.098/linux/mkl/include',
 		'/opt/intel/mkl/lib/intel64/libmkl_rt.so', '-O3', '-o', exec_filename], # an ugly command for a non-standard library location
-        'atlas': ['gcc', c_filename, '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename],
-        'openblas': ['gcc', c_filename, '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename],
+        'atlas': ['gcc', '-DUSE_ATLAS', c_filename, 'common_matrix.c', '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename],
+        'openblas': ['gcc', '-DUSE_OPENBLAS', c_filename, 'common_matrix.c', '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename],
+        'naive': ['gcc', '-DUSE_NAIVE', c_filename, 'common_matrix.c', '-O3', '-o', exec_filename],
     }
     try:
         run_command(lib_to_command[lib])

@@ -4,26 +4,11 @@
 #include <sys/time.h>
 #include <assert.h>
 #include <string.h>
-#ifdef USE_MKL
-#include <mkl.h>
-#else
-#include <cblas.h>
-#endif
+#include "common_matrix.h"
 
 void syntax(char *exec_name) {
     fprintf(stderr, "Syntax: %s <nb_calls> <size>\n", exec_name);
     exit(1);
-}
-
-double *allocate_matrix(int size) {
-    double *result = (double*) malloc(size*size*sizeof(double));
-    memset(result, 1, size*size*sizeof(double));
-    assert(result);
-    return result;
-}
-
-void free_matrix(double *matrix) {
-    free(matrix);
 }
 
 int main(int argc, char* argv[])
@@ -48,7 +33,7 @@ int main(int argc, char* argv[])
     int i;
     for(i = 0; i < nb_calls; i++) {
         gettimeofday(&before, NULL);
-        cblas_dgemm(CblasColMajor, CblasNoTrans, CblasTrans, size, size, size, alpha, A, size, B, size, beta, C, size);
+	matrix_product(A, B, C, size);
         gettimeofday(&after, NULL);
         double total_time = (after.tv_sec-before.tv_sec) + 1e-6*(after.tv_usec-before.tv_usec);
         printf("%f\n", total_time);

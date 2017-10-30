@@ -44,7 +44,7 @@ if __name__ == '__main__':
             required=True, help='Path of the CSV file for the results.')
     required_named.add_argument('--lib', type = str,
             required=True, help='Library to use.',
-            choices = ['mkl', 'mkl2', 'atlas', 'openblas'])
+            choices = ['mkl', 'mkl2', 'atlas', 'openblas', 'naive'])
     args = parser.parse_args()
     compile_generic(MULTI_DGEMM_EXEC, args.lib)
     run_all(args.nb_runs, args.nb_calls, args.size, args.nb_threads, args.csv_file, args.wrapper)
