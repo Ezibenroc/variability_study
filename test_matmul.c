@@ -47,8 +47,14 @@ inline double my_abs(double x) {
     return x > 0 ? x : -x ;
 }
 
-int main() {
-    for(int matrix_size = 100 ; matrix_size <= 1500 ; matrix_size += 100) {
+int main(int argc, char *argv[]) {
+    if(argc == 1) {
+        fprintf(stderr, "Syntax: %s <sizes>\n", argv[0]);
+        exit(1);
+    }
+    for(int i = 1; i < argc; i++) {
+        int matrix_size = atoi(argv[i]);
+        assert(matrix_size > 1 && matrix_size < 10000);
         printf("Testing size=%d...\n", matrix_size);
         double *matrix_A = init_matrix_A(matrix_size);
         double *matrix_B = init_matrix_B(matrix_size);
