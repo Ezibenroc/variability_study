@@ -6,6 +6,7 @@
 #endif
 #ifdef USE_NAIVE
 #pragma message "Using a custom implementaiton for BLAS."
+#include <omp.h>
 #endif
 #ifdef USE_OPENBLAS
 #pragma message "Using OpenBLAS for BLAS."
@@ -16,9 +17,10 @@
 #include <cblas.h>
 #endif
 
-
 void matrix_product(double *A, double *B, double *C, int size) {
 #ifdef USE_NAIVE
+    #pragma omp parallel
+    {
     for(int k = 0 ; k < size ; k++) {
         #pragma omp for // collapse(2) // ← doing the j-loop in parallel slow down the execution by a factor 2 (hypothesis: more cache miss)
         for(int i = 0 ; i < size ; i++) {
@@ -29,6 +31,7 @@ void matrix_product(double *A, double *B, double *C, int size) {
                 matrix_set(C, size, i, j, c + a*b);
             }
         }
+    }
     }
 #else
     double alpha = 1.;
