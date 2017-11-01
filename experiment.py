@@ -4,6 +4,8 @@ import abc
 import re
 import itertools
 import time
+import platform
+import cpuinfo # https://github.com/workhorsy/py-cpuinfo
 
 from runner import run_command, compile_generic
 
@@ -63,6 +65,50 @@ class Date(Program):
     def data(self, output):
         return [self.date]
 
+class Platform(Program):
+    def __init__(self):
+        super().__init__()
+        self.hostname = platform.node()
+        self.os = platform.platform()
+
+    @property
+    def command_line(self):
+        return []
+
+    @property
+    def header(self):
+        return ['hostname', 'os']
+
+    def data(self, output):
+        return [self.hostname, self.os]
+
+class CPU(Program):
+    @property
+    def command_line(self):
+        return []
+
+    @property
+    def header(self):
+        return ['cpu_model',
+                'nb_cores',
+                'advertised_frequency',
+                'current_frequency',
+                'cache_size',
+            ]
+
+    def data(self, output):
+        self.cpuinfo = cpuinfo.get_cpu_info()
+        cache_size = self.cpuinfo['l2_cache_size']
+        cache_size = cache_size.split()
+        assert len(cache_size) == 2 and cache_size[1] == 'KB'
+        self.cpuinfo['l2_cache_size'] = int(cache_size[0])*1000
+        return [self.cpuinfo['brand'],
+                self.cpuinfo['count'],
+                self.cpuinfo['hz_advertised_raw'][0],
+                self.cpuinfo['hz_actual_raw'][0],
+                self.cpuinfo['l2_cache_size'],
+            ]
+
 class Dgemm(Program):
     def __init__(self, lib, size, nb_calls):
         super().__init__()
@@ -111,6 +157,8 @@ if __name__ == '__main__':
     example = ExpEngine(application=Dgemm(lib='naive', size=300, nb_calls=3),
             wrappers=[
                     Date(),
+                    Platform(),
+                    CPU(),
                     Intercoolr(),
                 ])
     for i in range(3):
