@@ -7,6 +7,7 @@ import time
 import platform
 import psutil
 import csv
+import zipfile
 import cpuinfo # https://github.com/workhorsy/py-cpuinfo
 from multiprocessing import cpu_count
 
@@ -181,8 +182,9 @@ class Perf(Program):
         return data
 
 class Dgemm(Program):
-    def __init__(self, lib, size, nb_calls):
+    def __init__(self, lib, size, nb_calls, nb_threads):
         super().__init__()
+        os.environ['OMP_NUM_THREADS'] = str(nb_threads)
         self.lib = lib
         self.size = size
         self.nb_calls = nb_calls
@@ -202,8 +204,7 @@ class Dgemm(Program):
         return [(call_index, self.size, self.nb_calls, float(t)) for call_index, t in enumerate(times)]
 
 class ExpEngine:
-    def __init__(self, csv_filename, application, wrappers):
-        self.csv_filename = csv_filename
+    def __init__(self, application, wrappers):
         self.wrappers = wrappers
         self.application = application
         self.programs = [*self.wrappers, self.application]
@@ -225,8 +226,8 @@ class ExpEngine:
             data.append(list(itertools.chain(*[*wrapper_data, entry])))
         return data
 
-    def run_all(self, nb_runs):
-        with open(self.csv_filename, 'w') as f:
+    def run_all(self, csv_filename, nb_runs, compress=False):
+        with open(csv_filename, 'w') as f:
             writer = csv.writer(f)
             header = ['run_index'] + self.header
             writer.writerow(header)
@@ -234,16 +235,8 @@ class ExpEngine:
                 self.run()
                 for line in self.data:
                     writer.writerow([run_index] + line)
-
-
-if __name__ == '__main__':
-    example = ExpEngine(csv_filename='/tmp/bla.csv', application=Dgemm(lib='naive', size=300, nb_calls=3),
-            wrappers=[
-                    Date(),
-                    Platform(),
-                    CPU(),
-                    Temperature(),
-                    Perf(),
-                    Intercoolr(),
-                ])
-    example.run_all(3)
+        if compress:
+            zip_name = os.path.splitext(csv_filename)[0] + '.zip'
+            with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as myzip:
+                myzip.write(csv_filename)
+            print('Compressed the results: %s' % zip_name)
