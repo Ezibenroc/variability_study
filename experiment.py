@@ -5,9 +5,15 @@ import re
 import itertools
 import time
 import platform
+import psutil
+import csv
 import cpuinfo # https://github.com/workhorsy/py-cpuinfo
+from multiprocessing import cpu_count
 
 from runner import run_command, compile_generic
+
+def mean(l):
+    return sum(l)/len(l)
 
 class Program(metaclass=abc.ABCMeta):
     def __init__(self):
@@ -109,6 +115,71 @@ class CPU(Program):
                 self.cpuinfo['l2_cache_size'],
             ]
 
+class Temperature(Program):
+    @property
+    def command_line(self):
+        return []
+
+    @property
+    def header(self):
+        return ['average_temperature']
+
+    def data(self, output):
+        temperatures = [temp.current for temp in psutil.sensors_temperatures()['coretemp'] if temp.label.startswith('Core')]
+        assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
+        return [mean(temperatures)]
+
+class Perf(Program):
+    metrics = ['context-switches',
+               'cpu-migrations',
+               'page-faults',
+               'cycles',
+               'instructions',
+               'branches',
+               'branch-misses',
+                'L1-dcache-loads',
+                'L1-dcache-load-misses',
+                'LLC-loads',
+                'LLC-load-misses',
+                'L1-icache-load-misses',
+                'dTLB-loads',
+                'dTLB-load-misses',
+                'iTLB-loads',
+                'iTLB-load-misses',
+            ]
+
+    def __init__(self):
+        super().__init__()
+        os.environ['LC_TIME'] = 'en' # perf uses locale to display numbers, which is very annoying
+
+    @property
+    def command_line(self):
+        return ['perf', 'stat', '-ddd', '-x,', '-o', self.tmp_filename]
+
+    @property
+    def header(self):
+        return [m.replace('-', '_') for m in self.metrics]
+
+    def data(self, output):
+        with open(self.tmp_filename) as f:
+            lines = list(csv.reader(f))
+        data = []
+        metrics_to_handle = set(self.metrics)
+        for line in lines[2:]:
+            if line[2] in metrics_to_handle:
+                result = line[0]
+                try:
+                    result = int(result)
+                except ValueError:
+                    try:
+                        result = float(result)
+                    except ValueError:
+                        pass
+                data.append(result)
+                metrics_to_handle.remove(line[2])
+        assert len(metrics_to_handle) == 0
+        return data
+
 class Dgemm(Program):
     def __init__(self, lib, size, nb_calls):
         super().__init__()
@@ -123,15 +194,16 @@ class Dgemm(Program):
 
     @property
     def header(self):
-        return ['size', 'nb_calls', 'time']
+        return ['call_index', 'size', 'nb_calls', 'time']
 
     def data(self, output):
         output = output[0].decode('utf8').strip()
         times = output.split('\n')
-        return [(self.size, self.nb_calls, float(t)) for t in times]
+        return [(call_index, self.size, self.nb_calls, float(t)) for call_index, t in enumerate(times)]
 
 class ExpEngine:
-    def __init__(self, application, wrappers):
+    def __init__(self, csv_filename, application, wrappers):
+        self.csv_filename = csv_filename
         self.wrappers = wrappers
         self.application = application
         self.programs = [*self.wrappers, self.application]
@@ -153,17 +225,25 @@ class ExpEngine:
             data.append(list(itertools.chain(*[*wrapper_data, entry])))
         return data
 
+    def run_all(self, nb_runs):
+        with open(self.csv_filename, 'w') as f:
+            writer = csv.writer(f)
+            header = ['run_index'] + self.header
+            writer.writerow(header)
+            for run_index in range(nb_runs):
+                self.run()
+                for line in self.data:
+                    writer.writerow([run_index] + line)
+
+
 if __name__ == '__main__':
-    example = ExpEngine(application=Dgemm(lib='naive', size=300, nb_calls=3),
+    example = ExpEngine(csv_filename='/tmp/bla.csv', application=Dgemm(lib='naive', size=300, nb_calls=3),
             wrappers=[
                     Date(),
                     Platform(),
                     CPU(),
+                    Temperature(),
+                    Perf(),
                     Intercoolr(),
                 ])
-    for i in range(3):
-        example.run()
-        print(example.header)
-        data = example.data
-        for row in data:
-            print(row)
+    example.run_all(3)
