@@ -189,7 +189,7 @@ def compile_generic(exec_filename, lib):
 		'/opt/intel/mkl/lib/intel64/libmkl_rt.so', '-O3', '-o', exec_filename], # an ugly command for a non-standard library location
         'atlas': ['gcc', '-DUSE_ATLAS', c_filename, 'common_matrix.c', '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename],
         'openblas': ['gcc', '-DUSE_OPENBLAS', c_filename, 'common_matrix.c', '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename],
-        'naive': ['gcc', '-fopenmp', '-DUSE_NAIVE', c_filename, 'common_matrix.c', '-O3', '-o', exec_filename],
+        'naive': ['gcc', '-std=c99', '-fopenmp', '-DUSE_NAIVE', c_filename, 'common_matrix.c', '-O3', '-o', exec_filename],
     }
     try:
         run_command(lib_to_command[lib])
