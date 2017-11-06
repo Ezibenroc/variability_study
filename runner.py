@@ -181,7 +181,7 @@ def run_all_dtrsm(csv_file, nb_exp, size_range, big_size_range, offloading_mode,
 class LibraryNotFound(Exception):
     pass
 
-def compile_generic(exec_filename, lib):
+def compile_generic(exec_filename, lib, block_size=128):
     c_filename = exec_filename + '.c'
     lib_to_command = {
         'mkl': ['icc', '-DUSE_MKL', c_filename, 'common_matrix.c', '-mkl', '-O3', '-o', exec_filename],
@@ -189,7 +189,7 @@ def compile_generic(exec_filename, lib):
 		'/opt/intel/mkl/lib/intel64/libmkl_rt.so', '-O3', '-o', exec_filename], # an ugly command for a non-standard library location
         'atlas': ['gcc', '-DUSE_ATLAS', c_filename, 'common_matrix.c', '/usr/lib/atlas-base/libcblas.so.3', '-O3', '-o', exec_filename],
         'openblas': ['gcc', '-DUSE_OPENBLAS', c_filename, 'common_matrix.c', '/usr/lib/openblas-base/libblas.so', '-O3', '-o', exec_filename],
-        'naive': ['gcc', '-std=c99', '-fopenmp', '-DUSE_NAIVE', c_filename, 'common_matrix.c', '-O3', '-o', exec_filename],
+        'naive': ['gcc', '-DBLOCK_SIZE=%d' % block_size, '-std=c99', '-fopenmp', '-DUSE_NAIVE', c_filename, 'common_matrix.c', '-O3', '-o', exec_filename],
     }
     try:
         run_command(lib_to_command[lib])

@@ -182,13 +182,13 @@ class Perf(Program):
         return data
 
 class Dgemm(Program):
-    def __init__(self, lib, size, nb_calls, nb_threads):
+    def __init__(self, lib, size, nb_calls, nb_threads, block_size):
         super().__init__()
         os.environ['OMP_NUM_THREADS'] = str(nb_threads)
         self.lib = lib
         self.size = size
         self.nb_calls = nb_calls
-        compile_generic('multi_dgemm', lib)
+        compile_generic('multi_dgemm', lib, block_size)
 
     @property
     def command_line(self):

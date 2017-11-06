@@ -17,8 +17,6 @@
 #include <cblas.h>
 #endif
 
-#define BLOCK_SIZE 128
-
 inline int min(int a, int b) {
     return a < b ? a : b;
 }
