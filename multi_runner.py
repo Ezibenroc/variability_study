@@ -26,6 +26,7 @@ if __name__ == '__main__':
             choices = ['mkl', 'mkl2', 'atlas', 'openblas', 'naive'])
     args = parser.parse_args()
     wrappers=[
+            CommandLine(),
             Date(),
             Platform(),
             CPU(),

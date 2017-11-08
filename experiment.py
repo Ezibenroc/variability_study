@@ -1,5 +1,6 @@
 import tempfile
 import os
+import sys
 import abc
 import re
 import itertools
@@ -9,6 +10,7 @@ import psutil
 import csv
 import zipfile
 import cpuinfo # https://github.com/workhorsy/py-cpuinfo
+import git     # https://github.com/gitpython-developers/GitPython
 from multiprocessing import cpu_count
 
 from runner import run_command, compile_generic
@@ -56,10 +58,11 @@ class Intercoolr(Program):
                 if m is not None:
                     return [float(line[m.end():])]
 
-class Date(Program):
+class CommandLine(Program):
     def __init__(self):
         super().__init__()
-        self.date = time.strftime("%Y/%m/%d")
+        self.hash = git.Repo(search_parent_directories=True).head.object.hexsha
+        self.cmd = ' '.join(sys.argv)
 
     @property
     def command_line(self):
@@ -67,10 +70,25 @@ class Date(Program):
 
     @property
     def header(self):
-        return ['date']
+        return ['git_hash', 'command_line']
 
     def data(self, output):
-        return [self.date]
+        return [self.hash, self.cmd]
+
+
+class Date(Program):
+    @property
+    def command_line(self):
+        return []
+
+    @property
+    def header(self):
+        return ['date', 'hour']
+
+    def data(self, output):
+        date = time.strftime("%Y/%m/%d")
+        hour = time.strftime("%H:%M:%S")
+        return [date, hour]
 
 class Platform(Program):
     def __init__(self):
