@@ -38,6 +38,21 @@ class Program(metaclass=abc.ABCMeta):
     def data(self, output):
         pass
 
+class PurePythonProgram(Program):
+    @property
+    def command_line(self):
+        return []
+
+class NoDataProgram(Program):
+    @property
+    def header(self):
+        return []
+
+    @property
+    def data(self, output):
+        return []
+
+
 class Intercoolr(Program):
     def __init__(self):
         super().__init__()
@@ -60,15 +75,11 @@ class Intercoolr(Program):
                 if m is not None:
                     return [float(line[m.end():])]
 
-class CommandLine(Program):
+class CommandLine(PurePythonProgram):
     def __init__(self):
         super().__init__()
         self.hash = git.Repo(search_parent_directories=True).head.object.hexsha
         self.cmd = ' '.join(sys.argv)
-
-    @property
-    def command_line(self):
-        return []
 
     @property
     def header(self):
@@ -79,11 +90,7 @@ class CommandLine(Program):
         return [self.hash, self.cmd]
 
 
-class Date(Program):
-    @property
-    def command_line(self):
-        return []
-
+class Date(PurePythonProgram):
     @property
     def header(self):
         return ['date', 'hour']
@@ -94,15 +101,11 @@ class Date(Program):
         hour = time.strftime("%H:%M:%S")
         return [date, hour]
 
-class Platform(Program):
+class Platform(PurePythonProgram):
     def __init__(self):
         super().__init__()
         self.hostname = platform.node()
         self.os = platform.platform()
-
-    @property
-    def command_line(self):
-        return []
 
     @property
     def header(self):
@@ -112,11 +115,7 @@ class Platform(Program):
     def data(self):
         return [self.hostname, self.os]
 
-class CPU(Program):
-    @property
-    def command_line(self):
-        return []
-
+class CPU(PurePythonProgram):
     @property
     def header(self):
         return ['cpu_model',
@@ -140,11 +139,7 @@ class CPU(Program):
                 self.cpuinfo['l2_cache_size'],
             ]
 
-class Temperature(Program):
-    @property
-    def command_line(self):
-        return []
-
+class Temperature(PurePythonProgram):
     @property
     def header(self):
         return ['average_temperature']
@@ -207,7 +202,7 @@ class Perf(Program):
         assert len(metrics_to_handle) == 0
         return data
 
-class RemoveOperatingSystemNoise(Program):
+class RemoveOperatingSystemNoise(NoDataProgram):
     def __init__(self):
         super().__init__()
         os.environ['OMP_PROc_BIND'] = 'TRUE'
@@ -218,14 +213,6 @@ class RemoveOperatingSystemNoise(Program):
                 'numactl', '--physcpubind=all', '--localalloc', # we have to choose between localalloc and membind, let's pick localalloc
                 # also cannot use --touch option here, not sure to understand why
                 ]
-
-    @property
-    def header(self):
-        return []
-
-    @property
-    def data(self):
-        return []
 
 class Dgemm(Program):
     def __init__(self, lib, size, nb_calls, nb_threads, block_size):
