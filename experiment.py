@@ -9,6 +9,7 @@ import platform
 import psutil
 import csv
 import zipfile
+import random
 import cpuinfo # https://github.com/workhorsy/py-cpuinfo
 import git     # https://github.com/gitpython-developers/GitPython
 from multiprocessing import cpu_count
@@ -22,14 +23,19 @@ class Program(metaclass=abc.ABCMeta):
     def __init__(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
-        self.enabled = True
+        self.__enabled__ = True
+
+    @property
+    def enabled(self):
+        return True
+
+    @enabled.setter
+    def enabled(self, value):
+        pass
 
     @property
     def command_line(self):
-        if self.enabled:
-            return self.__command_line__()
-        else:
-            return []
+        return self.__command_line__()
 
     @abc.abstractmethod
     def __command_line__(self):
@@ -37,10 +43,7 @@ class Program(metaclass=abc.ABCMeta):
 
     @property
     def environment_variables(self):
-        if self.enabled:
-            return self.__environment_variables__()
-        else:
-            return {}
+        return self.__environment_variables__()
 
     @abc.abstractmethod
     def __environment_variables__(self):
@@ -56,15 +59,52 @@ class Program(metaclass=abc.ABCMeta):
 
     @property
     def data(self):
-        if self.enabled:
-            return self.__data__()
-        else:
-            return 'N/A'*len(self.header)
+        return self.__data__()
 
     @abc.abstractmethod
     def __data__(self):
         pass
 
+class Disableable(Program):
+    @property
+    def enabled(self):
+        return self.__enabled__
+
+    @enabled.setter
+    def enabled(self, value):
+        assert value in (True, False)
+        self.__enabled__ = value
+
+    @property
+    def command_line(self):
+        if self.enabled:
+            return self.__command_line__()
+        else:
+            return []
+
+    @property
+    def environment_variables(self):
+        if self.enabled:
+            return self.__environment_variables__()
+        else:
+            return {}
+
+    @property
+    def header(self):
+        enabled_name = self.__class__.__name__
+        return self.__header__() + [enabled_name]
+
+    @property
+    def data(self):
+        if self.enabled:
+            data = self.__data__()
+        else:
+            data = ['N/A']*(len(self.header)-1)
+        return data + [self.enabled]
+
+    @abc.abstractmethod
+    def __data__(self):
+        pass
 
 class PurePythonProgram(Program):
     def __command_line__(self):
@@ -81,7 +121,7 @@ class NoDataProgram(Program):
         return []
 
 
-class Intercoolr(Program):
+class Intercoolr(Disableable):
     def __init__(self):
         super().__init__()
         run_command(['make', '-C', 'intercoolr'])
@@ -168,7 +208,7 @@ class Temperature(PurePythonProgram):
         assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
         return [mean(temperatures)]
 
-class Perf(Program):
+class Perf(Disableable):
     metrics = ['context-switches',
                'cpu-migrations',
                'page-faults',
@@ -216,7 +256,7 @@ class Perf(Program):
         assert len(metrics_to_handle) == 0
         return data
 
-class RemoveOperatingSystemNoise(NoDataProgram):
+class RemoveOperatingSystemNoise(NoDataProgram, Disableable):
     def __environment_variables__(self):
         return {'OMP_PROc_BIND' : 'TRUE'}
 
@@ -257,10 +297,10 @@ class ExpEngine:
         self.base_environment = dict(os.environ)
 
     def run(self):
-        # Do the enable/disable thing here [...] TODO
         args = []
         os.environ = dict(self.base_environment)
         for prog in self.programs:
+            prog.enabled = random.choice([False, True])
             args.extend(prog.command_line)
             os.environ.update(prog.environment_variables)
         self.output = run_command(args)
