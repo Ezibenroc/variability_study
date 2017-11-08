@@ -21,14 +21,14 @@ for host in $*; do {
     run_command ${host} 'rm -rf scripts.zip scripts openblas.zip OpenBLAS* /usr/lib/openblas-base'
     scp -q openblas.zip root@${host}:/root
     scp -q scripts.zip  root@${host}:/root
-    run_command ${host} 'yes | apt install build-essential python python3 python3-dev zip linux-cpupower make linux-tools'
+    run_command ${host} 'yes | apt update && apt upgrade && apt install build-essential python python3 python3-dev zip linux-cpupower make linux-tools git numactl'
     run_command ${host} 'unzip openblas.zip'
     run_command ${host} 'cd OpenBLAS* && make -j 8 && make install PREFIX=/usr && mkdir /usr/lib/openblas-base/ && ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so'
     run_command ${host} 'unzip scripts.zip'
     run_command ${host} 'wget https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && pip3 install psutil py-cpuinfo GitPython'
     run_command ${host} 'cd scripts/cblas_tests/intercoolr && make'
     run_command ${host} 'cd scripts/cblas_tests && python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1 --stat'
-    run_command ${host} 'cd scripts/cblas_tests && python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 8 --csv_file /tmp/test.csv --lib naive'
+    run_command ${host} 'cd scripts/cblas_tests && python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 8 --csv_file /tmp/test.csv --lib naive --remove_os_noise'
     echo "DONE for ${host}"
 }&
 done
