@@ -22,34 +22,62 @@ class Program(metaclass=abc.ABCMeta):
     def __init__(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
+        self.enabled = True
 
     @property
-    @abc.abstractmethod
     def command_line(self):
+        if self.enabled:
+            return self.__command_line__()
+        else:
+            return []
+
+    @abc.abstractmethod
+    def __command_line__(self):
         pass
 
     @property
+    def environment_variables(self):
+        if self.enabled:
+            return self.__environment_variables__()
+        else:
+            return {}
+
     @abc.abstractmethod
+    def __environment_variables__(self):
+        pass
+
+    @property
     def header(self):
+        return self.__header__()
+
+    @abc.abstractmethod
+    def __header__(self):
         pass
 
     @property
+    def data(self):
+        if self.enabled:
+            return self.__data__()
+        else:
+            return 'N/A'*len(self.header)
+
     @abc.abstractmethod
-    def data(self, output):
+    def __data__(self):
         pass
+
 
 class PurePythonProgram(Program):
-    @property
-    def command_line(self):
+    def __command_line__(self):
         return []
+
+    def __environment_variables__(self):
+        return {}
 
 class NoDataProgram(Program):
-    @property
-    def header(self):
+    def __header__(self):
         return []
 
-    @property
-    def data(self, output):
+    def __data__(self):
         return []
 
 
@@ -57,21 +85,21 @@ class Intercoolr(Program):
     def __init__(self):
         super().__init__()
         run_command(['make', '-C', 'intercoolr'])
+        self.reg = re.compile('# ENERGY=')
 
-    @property
-    def command_line(self):
+    def __command_line__(self):
         return ['intercoolr/etrace2', '-o', self.tmp_filename]
 
-    @property
-    def header(self):
+    def __environment_variables__(self):
+        return {}
+
+    def __header__(self):
         return ['energy']
 
-    @property
-    def data(self):
-        reg = re.compile('# ENERGY=')
+    def __data__(self):
         with open(self.tmp_filename) as f:
             for line in f:
-                m = reg.match(line)
+                m = self.reg.match(line)
                 if m is not None:
                     return [float(line[m.end():])]
 
@@ -81,22 +109,18 @@ class CommandLine(PurePythonProgram):
         self.hash = git.Repo(search_parent_directories=True).head.object.hexsha
         self.cmd = ' '.join(sys.argv)
 
-    @property
-    def header(self):
+    def __header__(self):
         return ['git_hash', 'command_line']
 
-    @property
-    def data(self):
+    def __data__(self):
         return [self.hash, self.cmd]
 
 
 class Date(PurePythonProgram):
-    @property
-    def header(self):
+    def __header__(self):
         return ['date', 'hour']
 
-    @property
-    def data(self):
+    def __data__(self):
         date = time.strftime("%Y/%m/%d")
         hour = time.strftime("%H:%M:%S")
         return [date, hour]
@@ -107,17 +131,14 @@ class Platform(PurePythonProgram):
         self.hostname = platform.node()
         self.os = platform.platform()
 
-    @property
-    def header(self):
+    def __header__(self):
         return ['hostname', 'os']
 
-    @property
-    def data(self):
+    def __data__(self):
         return [self.hostname, self.os]
 
 class CPU(PurePythonProgram):
-    @property
-    def header(self):
+    def __header__(self):
         return ['cpu_model',
                 'nb_cores',
                 'advertised_frequency',
@@ -125,8 +146,7 @@ class CPU(PurePythonProgram):
                 'cache_size',
             ]
 
-    @property
-    def data(self):
+    def __data__(self):
         self.cpuinfo = cpuinfo.get_cpu_info()
         cache_size = self.cpuinfo['l2_cache_size']
         cache_size = cache_size.split()
@@ -140,12 +160,10 @@ class CPU(PurePythonProgram):
             ]
 
 class Temperature(PurePythonProgram):
-    @property
-    def header(self):
+    def __header__(self):
         return ['average_temperature']
 
-    @property
-    def data(self):
+    def __data__(self):
         temperatures = [temp.current for temp in psutil.sensors_temperatures()['coretemp'] if temp.label.startswith('Core')]
         assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
         return [mean(temperatures)]
@@ -169,20 +187,16 @@ class Perf(Program):
                 'iTLB-load-misses',
             ]
 
-    def __init__(self):
-        super().__init__()
-        os.environ['LC_TIME'] = 'en' # perf uses locale to display numbers, which is very annoying
-
-    @property
-    def command_line(self):
+    def __command_line__(self):
         return ['perf', 'stat', '-ddd', '-x,', '-o', self.tmp_filename]
 
-    @property
-    def header(self):
+    def __environment_variables__(self):
+        return {'LC_TIME' : 'en'} # perf uses locale to display numbers, which is very annoying
+
+    def __header__(self):
         return [m.replace('-', '_') for m in self.metrics]
 
-    @property
-    def data(self):
+    def __data__(self):
         with open(self.tmp_filename) as f:
             lines = list(csv.reader(f))
         data = []
@@ -203,12 +217,10 @@ class Perf(Program):
         return data
 
 class RemoveOperatingSystemNoise(NoDataProgram):
-    def __init__(self):
-        super().__init__()
-        os.environ['OMP_PROc_BIND'] = 'TRUE'
+    def __environment_variables__(self):
+        return {'OMP_PROc_BIND' : 'TRUE'}
 
-    @property
-    def command_line(self):
+    def __command_line__(self):
         return ['chrt', '--fifo', '99',
                 'numactl', '--physcpubind=all', '--localalloc', # we have to choose between localalloc and membind, let's pick localalloc
                 # also cannot use --touch option here, not sure to understand why
@@ -217,24 +229,24 @@ class RemoveOperatingSystemNoise(NoDataProgram):
 class Dgemm(Program):
     def __init__(self, lib, size, nb_calls, nb_threads, block_size):
         super().__init__()
-        os.environ['OMP_NUM_THREADS'] = str(nb_threads)
         self.lib = lib
         self.size = size
         self.nb_calls = nb_calls
+        self.nb_threads = nb_threads
         compile_generic('multi_dgemm', lib, block_size)
 
-    @property
-    def command_line(self):
+    def __environment_variables__(self):
+        return {'OMP_NUM_THREADS' : str(self.nb_threads)}
+
+    def __command_line__(self):
         return ['./multi_dgemm', str(self.nb_calls), str(self.size), self.tmp_filename]
 
-    @property
-    def header(self):
+    def __header__(self):
         return ['call_index', 'size', 'nb_calls', 'time']
 
-    @property
-    def data(self):
+    def __data__(self):
         with open(self.tmp_filename, 'r') as f:
-            times = output = f.readlines()
+            times = f.readlines()
         return [(call_index, self.size, self.nb_calls, float(t)) for call_index, t in enumerate(times)]
 
 class ExpEngine:
@@ -242,9 +254,15 @@ class ExpEngine:
         self.wrappers = wrappers
         self.application = application
         self.programs = [*self.wrappers, self.application]
+        self.base_environment = dict(os.environ)
 
     def run(self):
-        args = list(itertools.chain(*[prog.command_line for prog in self.programs]))
+        # Do the enable/disable thing here [...] TODO
+        args = []
+        os.environ = dict(self.base_environment)
+        for prog in self.programs:
+            args.extend(prog.command_line)
+            os.environ.update(prog.environment_variables)
         self.output = run_command(args)
 
     @property
