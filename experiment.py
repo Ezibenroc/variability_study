@@ -181,6 +181,25 @@ class Perf(Program):
         assert len(metrics_to_handle) == 0
         return data
 
+class RemoveOperatingSystemNoise(Program):
+    def __init__(self):
+        super().__init__()
+        os.environ['OMP_PROc_BIND'] = 'TRUE'
+
+    @property
+    def command_line(self):
+        return ['chrt', '--fifo', '99',
+                'numactl', '--physcpubind=all', '--localalloc', # we have to choose between localalloc and membind, let's pick localalloc
+                # also cannot use --touch option here, not sure to understand why
+                ]
+
+    @property
+    def header(self):
+        return []
+
+    def data(self, output):
+        return []
+
 class Dgemm(Program):
     def __init__(self, lib, size, nb_calls, nb_threads, block_size):
         super().__init__()
