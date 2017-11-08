@@ -33,6 +33,7 @@ class Program(metaclass=abc.ABCMeta):
     def header(self):
         pass
 
+    @property
     @abc.abstractmethod
     def data(self, output):
         pass
@@ -50,7 +51,8 @@ class Intercoolr(Program):
     def header(self):
         return ['energy']
 
-    def data(self, _):
+    @property
+    def data(self):
         reg = re.compile('# ENERGY=')
         with open(self.tmp_filename) as f:
             for line in f:
@@ -72,7 +74,8 @@ class CommandLine(Program):
     def header(self):
         return ['git_hash', 'command_line']
 
-    def data(self, output):
+    @property
+    def data(self):
         return [self.hash, self.cmd]
 
 
@@ -85,7 +88,8 @@ class Date(Program):
     def header(self):
         return ['date', 'hour']
 
-    def data(self, output):
+    @property
+    def data(self):
         date = time.strftime("%Y/%m/%d")
         hour = time.strftime("%H:%M:%S")
         return [date, hour]
@@ -104,7 +108,8 @@ class Platform(Program):
     def header(self):
         return ['hostname', 'os']
 
-    def data(self, output):
+    @property
+    def data(self):
         return [self.hostname, self.os]
 
 class CPU(Program):
@@ -121,7 +126,8 @@ class CPU(Program):
                 'cache_size',
             ]
 
-    def data(self, output):
+    @property
+    def data(self):
         self.cpuinfo = cpuinfo.get_cpu_info()
         cache_size = self.cpuinfo['l2_cache_size']
         cache_size = cache_size.split()
@@ -143,7 +149,8 @@ class Temperature(Program):
     def header(self):
         return ['average_temperature']
 
-    def data(self, output):
+    @property
+    def data(self):
         temperatures = [temp.current for temp in psutil.sensors_temperatures()['coretemp'] if temp.label.startswith('Core')]
         assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
         return [mean(temperatures)]
@@ -179,7 +186,8 @@ class Perf(Program):
     def header(self):
         return [m.replace('-', '_') for m in self.metrics]
 
-    def data(self, output):
+    @property
+    def data(self):
         with open(self.tmp_filename) as f:
             lines = list(csv.reader(f))
         data = []
@@ -215,7 +223,8 @@ class RemoveOperatingSystemNoise(Program):
     def header(self):
         return []
 
-    def data(self, output):
+    @property
+    def data(self):
         return []
 
 class Dgemm(Program):
@@ -229,15 +238,16 @@ class Dgemm(Program):
 
     @property
     def command_line(self):
-        return ['./multi_dgemm', str(self.nb_calls), str(self.size)]
+        return ['./multi_dgemm', str(self.nb_calls), str(self.size), self.tmp_filename]
 
     @property
     def header(self):
         return ['call_index', 'size', 'nb_calls', 'time']
 
-    def data(self, output):
-        output = output[0].decode('utf8').strip()
-        times = output.split('\n')
+    @property
+    def data(self):
+        with open(self.tmp_filename, 'r') as f:
+            times = output = f.readlines()
         return [(call_index, self.size, self.nb_calls, float(t)) for call_index, t in enumerate(times)]
 
 class ExpEngine:
@@ -256,8 +266,8 @@ class ExpEngine:
 
     @property
     def data(self):
-        wrapper_data = [wrap.data(self.output) for wrap in self.wrappers]
-        app_data = self.application.data(self.output)
+        wrapper_data = [wrap.data for wrap in self.wrappers]
+        app_data = self.application.data
         data = []
         for entry in app_data:
             data.append(list(itertools.chain(*[*wrapper_data, entry])))
