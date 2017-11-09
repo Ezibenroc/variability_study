@@ -25,6 +25,9 @@ class Program(metaclass=abc.ABCMeta):
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
         self.__enabled__ = True
 
+    def __del__(self):
+        self.tmp_dir.cleanup()
+
     @property
     def enabled(self):
         return True
@@ -59,7 +62,9 @@ class Program(metaclass=abc.ABCMeta):
 
     @property
     def data(self):
-        return self.__data__()
+        data = self.__data__()
+        assert len(data) == len(self.header)
+        return data
 
     @abc.abstractmethod
     def __data__(self):
