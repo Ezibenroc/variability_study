@@ -107,10 +107,6 @@ class Disableable(Program):
             data = ['N/A']*(len(self.header)-1)
         return data + [self.enabled]
 
-    @abc.abstractmethod
-    def __data__(self):
-        pass
-
 class PurePythonProgram(Program):
     def __command_line__(self):
         return []

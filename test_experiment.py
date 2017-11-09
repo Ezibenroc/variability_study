@@ -5,26 +5,32 @@ from experiment import *
 
 
 class MockProgram(Program):
+    def __init__(self, index):
+        super().__init__()
+        self.index = index
+
     def __command_line__(self):
-        return ['cmd']
+        return ['cmd %d' % self.index]
 
     def __environment_variables__(self):
-        return ['env']
+        return {'env %d' % self.index : self.index}
 
     def __header__(self):
-        return ['head']
+        return ['head %d' % self.index]
 
     def __data__(self):
-        return ['data']
+        return ['data %d' % self.index]
 
 class BasicProgramTest(unittest.TestCase):
-
     def test_basic(self):
-        prog = MockProgram()
-        self.assertEqual(prog.command_line, ['cmd'])
-        self.assertEqual(prog.environment_variables, ['env'])
-        self.assertEqual(prog.header, ['head'])
-        self.assertEqual(prog.data, ['data'])
+        prog = MockProgram(3)
+        self.assertTrue(prog.enabled)
+        self.assertEqual(prog.command_line, ['cmd 3'])
+        self.assertEqual(prog.environment_variables, {'env 3' : 3})
+        self.assertEqual(prog.header, ['head 3'])
+        self.assertEqual(prog.data, ['data 3'])
+        prog.enabled = False
+        self.assertTrue(prog.enabled)
         # Checking that we can write and read in the tmp file
         expected_content = 'hello world!\n'
         with open(prog.tmp_filename, 'w') as f:
@@ -36,7 +42,7 @@ class BasicProgramTest(unittest.TestCase):
 
     class WrongMockProgram(MockProgram):
         def __init__(self, size):
-            super().__init__()
+            super().__init__(27)
             self.size = size
 
         def __data__(self):
@@ -52,6 +58,52 @@ class BasicProgramTest(unittest.TestCase):
                 data = prog.data
             prog = self.WrongMockProgram(1)
             data = prog.data
+
+class SpecialProgramTest(unittest.TestCase):
+    class MockPurePython(PurePythonProgram):
+        def __header__(self):
+            return ['head']
+
+        def __data__(self):
+            return ['data']
+
+    def test_pure_python(self):
+        prog = self.MockPurePython()
+        self.assertEqual(prog.command_line, [])
+        self.assertEqual(prog.environment_variables, {})
+        self.assertEqual(prog.header, ['head'])
+        self.assertEqual(prog.data, ['data'])
+
+    class MockNoData(NoDataProgram):
+        def __command_line__(self):
+            return ['cmd']
+
+        def __environment_variables__(self):
+            return {'env' : 42}
+
+    def test_pure_python(self):
+        prog = self.MockNoData()
+        self.assertEqual(prog.command_line, ['cmd'])
+        self.assertEqual(prog.environment_variables, {'env' : 42})
+        self.assertEqual(prog.header, [])
+        self.assertEqual(prog.data, [])
+
+    class MockDisableable(Disableable, MockProgram):
+        pass
+
+    def test_pure_python(self):
+        prog = self.MockDisableable(42)
+        self.assertTrue(prog.enabled)
+        self.assertEqual(prog.command_line, ['cmd 42'])
+        self.assertEqual(prog.environment_variables, {'env 42' : 42})
+        self.assertEqual(prog.header, ['head 42', 'MockDisableable'])
+        self.assertEqual(prog.data, ['data 42', True])
+        prog.enabled = False
+        self.assertFalse(prog.enabled)
+        self.assertEqual(prog.command_line, [])
+        self.assertEqual(prog.environment_variables, {})
+        self.assertEqual(prog.header, ['head 42', 'MockDisableable'])
+        self.assertEqual(prog.data, ['N/A', False])
 
 if __name__ == "__main__":
     unittest.main()
