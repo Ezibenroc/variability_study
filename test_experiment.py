@@ -21,6 +21,33 @@ class MockProgram(Program):
     def __data__(self):
         return ['data %d' % self.index]
 
+class MockPurePython(PurePythonProgram):
+    def __header__(self):
+        return ['head']
+
+    def __data__(self):
+        return ['data']
+
+class MockNoData(NoDataProgram):
+    def __command_line__(self):
+        return ['cmd']
+
+    def __environment_variables__(self):
+        return {'env' : 42}
+
+class MockDisableable(Disableable, MockProgram):
+    pass
+
+class MockApplication(MockProgram):
+    def __init__(self):
+        super().__init__(-1)
+
+    def __header__(self):
+        return ['header_app_1', 'header_app_2', 'header_app_3']
+
+    def __data__(self):
+        return [['data_1:1', 'data_1:2'], ['data_2:1', 'data_2:2'], ['data_3:1', 'data_3:2']]
+
 class BasicProgramTest(unittest.TestCase):
     def test_basic(self):
         prog = MockProgram(3)
@@ -60,39 +87,23 @@ class BasicProgramTest(unittest.TestCase):
             data = prog.data
 
 class SpecialProgramTest(unittest.TestCase):
-    class MockPurePython(PurePythonProgram):
-        def __header__(self):
-            return ['head']
-
-        def __data__(self):
-            return ['data']
 
     def test_pure_python(self):
-        prog = self.MockPurePython()
+        prog = MockPurePython()
         self.assertEqual(prog.command_line, [])
         self.assertEqual(prog.environment_variables, {})
         self.assertEqual(prog.header, ['head'])
         self.assertEqual(prog.data, ['data'])
 
-    class MockNoData(NoDataProgram):
-        def __command_line__(self):
-            return ['cmd']
-
-        def __environment_variables__(self):
-            return {'env' : 42}
-
     def test_pure_python(self):
-        prog = self.MockNoData()
+        prog = MockNoData()
         self.assertEqual(prog.command_line, ['cmd'])
         self.assertEqual(prog.environment_variables, {'env' : 42})
         self.assertEqual(prog.header, [])
         self.assertEqual(prog.data, [])
 
-    class MockDisableable(Disableable, MockProgram):
-        pass
-
     def test_pure_python(self):
-        prog = self.MockDisableable(42)
+        prog = MockDisableable(42)
         self.assertTrue(prog.enabled)
         self.assertEqual(prog.command_line, ['cmd 42'])
         self.assertEqual(prog.environment_variables, {'env 42' : 42})
@@ -104,6 +115,37 @@ class SpecialProgramTest(unittest.TestCase):
         self.assertEqual(prog.environment_variables, {})
         self.assertEqual(prog.header, ['head 42', 'MockDisableable'])
         self.assertEqual(prog.data, ['N/A', False])
+
+class ExpEngineTest(unittest.TestCase):
+    def setUp(self):
+        self.application = MockApplication()
+        self.wrappers=[MockDisableable(i) for i in range(50)]
+        self.programs = self.wrappers + [self.application]
+        self.expengine = ExpEngine(application=self.application, wrappers=self.wrappers)
+
+    def test_basic(self):
+        self.assertEqual(self.expengine.header, sum((prog.header for prog in self.programs), []))
+        self.assertEqual(self.expengine.command_line, sum((prog.command_line for prog in self.programs), []))
+        expected_env = {}
+        for prog in self.programs:
+            expected_env.update(prog.environment_variables)
+        self.assertEqual(self.expengine.environment_variables, expected_env)
+        data = self.expengine.data
+        for entry_id, entry in enumerate(self.expengine.data):
+            for wrap in self.wrappers:
+                for i, h in enumerate(wrap.header):
+                    index = self.expengine.header.index(h)
+                    self.assertEqual(wrap.data[i], entry[index])
+            for i, h in enumerate(self.application.header):
+                index = self.expengine.header.index(h)
+                self.assertEqual(self.application.data[i][entry_id], entry[index])
+
+
+    def test_enable(self):
+        self.expengine.randomly_enable()
+        self.assertIn(True,  [prog.enabled for prog in self.wrappers]) # probability 2^-50 to fail
+        self.assertIn(False, [prog.enabled for prog in self.wrappers]) # probability 2^-50 to fail
+
 
 if __name__ == "__main__":
     unittest.main()

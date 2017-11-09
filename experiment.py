@@ -10,6 +10,7 @@ import psutil
 import csv
 import zipfile
 import random
+import collections
 import cpuinfo # https://github.com/workhorsy/py-cpuinfo
 import git     # https://github.com/gitpython-developers/GitPython
 from multiprocessing import cpu_count
@@ -268,6 +269,7 @@ class RemoveOperatingSystemNoise(NoDataProgram, Disableable):
                 ]
 
 class Dgemm(Program):
+    DgemmData = collections.namedtuple('DgemmData', ['call_index', 'size', 'nb_calls', 'time'])
     def __init__(self, lib, size, nb_calls, nb_threads, block_size):
         super().__init__()
         self.lib = lib
@@ -288,7 +290,11 @@ class Dgemm(Program):
     def __data__(self):
         with open(self.tmp_filename, 'r') as f:
             times = f.readlines()
-        return [(call_index, self.size, self.nb_calls, float(t)) for call_index, t in enumerate(times)]
+        data = self.DgemmData([], [self.size]*len(times), [self.nb_calls]*len(times), [])
+        for call_index, t in enumerate(times):
+            data.call_index.append(call_index)
+            data.time.append(float(t))
+        return data
 
 class ExpEngine:
     def __init__(self, application, wrappers):
@@ -297,14 +303,23 @@ class ExpEngine:
         self.programs = [*self.wrappers, self.application]
         self.base_environment = dict(os.environ)
 
-    def run(self):
-        args = []
-        os.environ = dict(self.base_environment)
+    def randomly_enable(self):
         for prog in self.programs:
             prog.enabled = random.choice([False, True])
-            args.extend(prog.command_line)
-            os.environ.update(prog.environment_variables)
-        self.output = run_command(args)
+
+    @property
+    def command_line(self):
+        cmd =[]
+        for prog in self.programs:
+            cmd.extend(prog.command_line)
+        return cmd
+
+    @property
+    def environment_variables(self):
+        env = {}
+        for prog in self.programs:
+            env.update(prog.environment_variables)
+        return env
 
     @property
     def header(self):
@@ -315,9 +330,16 @@ class ExpEngine:
         wrapper_data = [wrap.data for wrap in self.wrappers]
         app_data = self.application.data
         data = []
-        for entry in app_data:
-            data.append(list(itertools.chain(*[*wrapper_data, entry])))
+        for i in range(len(app_data[0])):
+            entry = [*wrapper_data, [d[i] for d in app_data]]
+            data.append(list(itertools.chain(*entry)))
         return data
+
+    def run(self):
+        self.randomly_enable()
+        os.environ = dict(self.base_environment)
+        os.environ.update(self.environment_variables)
+        self.output = run_command(self.command_line)
 
     def run_all(self, csv_filename, nb_runs, compress=False):
         with open(csv_filename, 'w') as f:
@@ -326,6 +348,8 @@ class ExpEngine:
             writer.writerow(header)
             for run_index in range(nb_runs):
                 self.run()
+                print(run_index)
+                print(self.data)
                 for line in self.data:
                     writer.writerow([run_index] + line)
         if compress:
