@@ -13,7 +13,7 @@ class MockProgram(Program):
         return ['cmd %d' % self.index]
 
     def __environment_variables__(self):
-        return {'env %d' % self.index : self.index}
+        return {'env %d' % self.index : str(self.index)}
 
     def __header__(self):
         return ['head %d' % self.index]
@@ -33,7 +33,7 @@ class MockNoData(NoDataProgram):
         return ['cmd']
 
     def __environment_variables__(self):
-        return {'env' : 42}
+        return {'env' : '42'}
 
 class MockDisableable(Disableable, MockProgram):
     pass
@@ -53,7 +53,7 @@ class BasicProgramTest(unittest.TestCase):
         prog = MockProgram(3)
         self.assertTrue(prog.enabled)
         self.assertEqual(prog.command_line, ['cmd 3'])
-        self.assertEqual(prog.environment_variables, {'env 3' : 3})
+        self.assertEqual(prog.environment_variables, {'env 3' : '3'})
         self.assertEqual(prog.header, ['head 3'])
         self.assertEqual(prog.data, ['data 3'])
         prog.enabled = False
@@ -98,7 +98,7 @@ class SpecialProgramTest(unittest.TestCase):
     def test_pure_python(self):
         prog = MockNoData()
         self.assertEqual(prog.command_line, ['cmd'])
-        self.assertEqual(prog.environment_variables, {'env' : 42})
+        self.assertEqual(prog.environment_variables, {'env' : '42'})
         self.assertEqual(prog.header, [])
         self.assertEqual(prog.data, [])
 
@@ -106,7 +106,7 @@ class SpecialProgramTest(unittest.TestCase):
         prog = MockDisableable(42)
         self.assertTrue(prog.enabled)
         self.assertEqual(prog.command_line, ['cmd 42'])
-        self.assertEqual(prog.environment_variables, {'env 42' : 42})
+        self.assertEqual(prog.environment_variables, {'env 42' : '42'})
         self.assertEqual(prog.header, ['head 42', 'MockDisableable'])
         self.assertEqual(prog.data, ['data 42', True])
         prog.enabled = False
@@ -145,7 +145,54 @@ class ExpEngineTest(unittest.TestCase):
         self.expengine.randomly_enable()
         self.assertIn(True,  [prog.enabled for prog in self.wrappers]) # probability 2^-50 to fail
         self.assertIn(False, [prog.enabled for prog in self.wrappers]) # probability 2^-50 to fail
+        self.expengine.enable_all()
+        self.assertEqual([True]*len(self.wrappers), [wrap.enabled for wrap in self.wrappers])
+        self.expengine.disable_all()
+        self.assertEqual([False]*len(self.wrappers), [wrap.enabled for wrap in self.wrappers])
 
+    class DummyTime(MockDisableable):
+        def __command_line__(self):
+            return ['time']
+
+    class DummyPwd(MockApplication):
+        def __command_line__(self):
+            return ['pwd']
+
+    def test_run(self):
+        initial_environ = dict(os.environ)
+        application=self.DummyPwd()
+        wrappers=[self.DummyTime(i) for i in range(10)]
+        exp = ExpEngine(application=application, wrappers=wrappers)
+
+        exp.disable_all()
+        exp.run()
+        expected = dict(initial_environ)
+        expected.update(application.environment_variables)
+        self.assertEqual(expected, dict(os.environ))
+
+        exp.enable_all()
+        exp.run()
+        expected = dict(initial_environ)
+        expected.update(application.environment_variables)
+        for wrap in wrappers:
+            expected.update(wrap.environment_variables)
+        self.assertEqual(expected, dict(os.environ))
+
+        exp.disable_all()
+        exp.run()
+        expected = dict(initial_environ)
+        expected.update(application.environment_variables)
+        self.assertEqual(expected, dict(os.environ))
+
+        for _ in range(10):
+            exp.randomly_enable()
+            exp.run()
+            expected = dict(initial_environ)
+            expected.update(application.environment_variables)
+            for wrap in wrappers:
+                if wrap.enabled: # being paranoid, useless if statement if everything is coded correctly
+                    expected.update(wrap.environment_variables)
+            self.assertEqual(expected, dict(os.environ))
 
 if __name__ == "__main__":
     unittest.main()

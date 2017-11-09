@@ -307,6 +307,14 @@ class ExpEngine:
         for prog in self.programs:
             prog.enabled = random.choice([False, True])
 
+    def enable_all(self):
+        for prog in self.programs:
+            prog.enabled = True
+
+    def disable_all(self):
+        for prog in self.programs:
+            prog.enabled = False
+
     @property
     def command_line(self):
         cmd =[]
@@ -336,8 +344,8 @@ class ExpEngine:
         return data
 
     def run(self):
-        self.randomly_enable()
-        os.environ = dict(self.base_environment)
+        os.environ.clear()
+        os.environ.update(self.base_environment)
         os.environ.update(self.environment_variables)
         self.output = run_command(self.command_line)
 
@@ -347,9 +355,8 @@ class ExpEngine:
             header = ['run_index'] + self.header
             writer.writerow(header)
             for run_index in range(nb_runs):
+                self.randomly_enable()
                 self.run()
-                print(run_index)
-                print(self.data)
                 for line in self.data:
                     writer.writerow([run_index] + line)
         if compress:
