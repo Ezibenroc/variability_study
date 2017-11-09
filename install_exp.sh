@@ -21,7 +21,8 @@ for host in $*; do {
     run_command ${host} 'rm -rf scripts.zip scripts openblas.zip OpenBLAS* /usr/lib/openblas-base'
     scp -q openblas.zip root@${host}:/root
     scp -q scripts.zip  root@${host}:/root
-    run_command ${host} 'yes | apt update && apt upgrade && apt install build-essential python python3 python3-dev zip linux-cpupower make linux-tools git numactl'
+    run_command ${host} 'yes | apt update && apt upgrade'
+    run_command ${host} 'yes | apt install build-essential python python3 python3-dev zip linux-cpupower make linux-tools git numactl'
     run_command ${host} 'unzip openblas.zip'
     run_command ${host} 'cd OpenBLAS* && make -j 8 && make install PREFIX=/usr && mkdir /usr/lib/openblas-base/ && ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so'
     run_command ${host} 'unzip scripts.zip'
