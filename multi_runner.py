@@ -35,6 +35,6 @@ if __name__ == '__main__':
             Intercoolr(),
         ]
     if args.remove_os_noise:
-        wrappers.append(RemoveOperatingSystemNoise())
+        wrappers.append(RemoveOperatingSystemNoise(args.nb_threads))
     exp = ExpEngine(application=Dgemm(lib=args.lib, size=args.size, nb_calls=args.nb_calls, nb_threads=args.nb_threads, block_size=args.block_size), wrappers=wrappers)
     exp.run_all(nb_runs=args.nb_runs, csv_filename=args.csv_file, compress=True)

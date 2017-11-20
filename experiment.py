@@ -258,13 +258,30 @@ class Perf(Program):
         assert len(metrics_to_handle) == 0
         return data
 
-class RemoveOperatingSystemNoise(NoDataProgram, Disableable):
+class RemoveOperatingSystemNoise(Disableable):
+    def __init__(self, nb_threads):
+        super().__init__()
+        self.nb_cores = psutil.cpu_count()
+        if nb_threads not in (1, self.nb_cores):
+            raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
+        self.nb_threads = nb_threads
+
+    def __header__(self):
+        return ['cpubind']
+
+    def __data__(self):
+        return [self.cpubind]
+
     def __environment_variables__(self):
         return {'OMP_PROc_BIND' : 'TRUE'}
 
     def __command_line__(self):
+        if self.nb_threads == self.nb_cores:
+            self.cpubind = 'all'
+        else:
+            self.cpubind = str(random.randint(0, self.nb_cores))
         return ['chrt', '--fifo', '99',
-                'numactl', '--physcpubind=all', '--localalloc', # we have to choose between localalloc and membind, let's pick localalloc
+                'numactl', '--physcpubind=%s' % self.cpubind, '--localalloc', # we have to choose between localalloc and membind, let's pick localalloc
                 # also cannot use --touch option here, not sure to understand why
                 ]
 
