@@ -123,7 +123,7 @@ class NoDataProgram(Program):
         return []
 
 
-class Intercoolr(Disableable):
+class Intercoolr(Program):
     def __init__(self):
         super().__init__()
         run_command(['make', '-C', 'intercoolr'])
@@ -210,7 +210,7 @@ class Temperature(PurePythonProgram):
         assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
         return [mean(temperatures)]
 
-class Perf(Disableable):
+class Perf(Program):
     metrics = ['context-switches',
                'cpu-migrations',
                'page-faults',
