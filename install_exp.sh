@@ -29,7 +29,7 @@ for host in $*; do {
     run_command ${host} 'wget https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && pip3 install psutil py-cpuinfo GitPython'
     run_command ${host} 'cd scripts/cblas_tests/intercoolr && make'
     run_command ${host} 'cd scripts/cblas_tests && python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1 --stat'
-    run_command ${host} 'cd scripts/cblas_tests && python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 8 --csv_file /tmp/test.csv --lib naive --remove_os_noise'
+    run_command ${host} 'cd scripts/cblas_tests && python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --remove_os_noise'
     echo "DONE for ${host}"
 }&
 done
