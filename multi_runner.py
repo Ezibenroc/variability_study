@@ -18,6 +18,8 @@ if __name__ == '__main__':
             default=1, help='Number of threads used to perform the operation (may not be supported by all BLAS libraries).')
     parser.add_argument('--remove_os_noise', action='store_true',
             help='Remove the operating system noise (e.g. by using a FIFO scheduling policy and binding threads and memory).')
+    parser.add_argument('--likwid', type=str, choices=['CLOCK', 'ENERGY'],
+            default=None, help='Measure the given Likwid event. When used, the option --remove_os_noise is automatically enabled.')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--csv_file', type = str,
             required=True, help='Path of the CSV file for the results.')
@@ -30,11 +32,16 @@ if __name__ == '__main__':
             Date(),
             Platform(),
             CPU(),
-            Temperature(),
-            Perf(),
-            Intercoolr(),
-        ]
-    if args.remove_os_noise:
+    ]
+    if args.likwid is None:
+        wrappers.extend([
+                Temperature(),
+                Perf(),
+                Intercoolr(),
+            ])
+    else:
+        wrappers.append(Likwid(group=args.likwid, nb_threads=args.nb_threads))
+    if args.remove_os_noise and args.likwid is None:
         wrappers.append(RemoveOperatingSystemNoise(args.nb_threads))
-    exp = ExpEngine(application=Dgemm(lib=args.lib, size=args.size, nb_calls=args.nb_calls, nb_threads=args.nb_threads, block_size=args.block_size), wrappers=wrappers)
+    exp = ExpEngine(application=Dgemm(lib=args.lib, size=args.size, nb_calls=args.nb_calls, nb_threads=args.nb_threads, block_size=args.block_size, likwid=args.likwid), wrappers=wrappers)
     exp.run_all(nb_runs=args.nb_runs, csv_filename=args.csv_file, compress=True)

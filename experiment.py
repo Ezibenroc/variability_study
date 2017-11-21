@@ -285,15 +285,44 @@ class RemoveOperatingSystemNoise(Disableable):
                 # also cannot use --touch option here, not sure to understand why
                 ]
 
+class Likwid(Program):
+    def __init__(self, group, nb_threads):
+        super().__init__()
+        self.group = group
+        self.nb_cores = psutil.cpu_count()
+        if nb_threads not in (1, self.nb_cores):
+            raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
+        self.nb_threads = nb_threads
+
+    def __header__(self):
+        return ['TODO']
+
+    def __data__(self):
+        return ['TODO']
+
+    def __environment_variables__(self):
+        # likwid handles the number of threads and the core pinning
+        return {'LIKWID_FILENAME': self.tmp_filename}
+
+    def __command_line__(self):
+        if self.nb_threads == self.nb_cores:
+            self.cpubind = '%d-%d' % (0, self.nb_cores)
+        else:
+            self.cpubind = str(random.randint(0, self.nb_cores))
+        return ['chrt', '--fifo', '99',
+                'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-m'
+                ]
+
 class Dgemm(Program):
     DgemmData = collections.namedtuple('DgemmData', ['call_index', 'size', 'nb_calls', 'time'])
-    def __init__(self, lib, size, nb_calls, nb_threads, block_size):
+    def __init__(self, lib, size, nb_calls, nb_threads, block_size, likwid=None):
         super().__init__()
         self.lib = lib
         self.size = size
         self.nb_calls = nb_calls
         self.nb_threads = nb_threads
-        compile_generic('multi_dgemm', lib, block_size)
+        self.likwid = likwid
+        compile_generic('multi_dgemm', lib, block_size, likwid)
 
     def __environment_variables__(self):
         return {'OMP_NUM_THREADS' : str(self.nb_threads)}

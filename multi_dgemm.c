@@ -35,6 +35,12 @@ int main(int argc, char* argv[]) {
     double beta = 1.;
 
 #ifdef LIKWID_PERFMON
+    char *likwid_filename = getenv("LIKWID_FILENAME");
+    FILE *likwid_outfile;
+    if(likwid_filename == NULL)
+        likwid_outfile = stdout;
+    else
+        likwid_outfile = fopen(likwid_filename, "w");
     LIKWID_MARKER_INIT;
     #pragma omp parallel
     {
@@ -42,10 +48,9 @@ int main(int argc, char* argv[]) {
         LIKWID_MARKER_REGISTER("perf_dgemm");
     }
     assert(perfmon_getNumberOfGroups() == 1); // we do not handle the multi-group case (yet?)
-#else
+#endif
     struct timeval before = {};
     struct timeval after = {};
-#endif
 
     for(int i = 0; i < nb_calls; i++) {
 #ifdef LIKWID_PERFMON
@@ -53,9 +58,8 @@ int main(int argc, char* argv[]) {
         {
             LIKWID_MARKER_START("perf_dgemm");
         }
-#else
-        gettimeofday(&before, NULL);
 #endif
+        gettimeofday(&before, NULL);
         matrix_product(A, B, C, size);
 #ifdef LIKWID_PERFMON
         #pragma omp parallel
@@ -69,20 +73,19 @@ int main(int argc, char* argv[]) {
             int my_thread_id = omp_get_thread_num();
             for(int nthread = 0; nthread < omp_get_num_threads(); nthread++) {
                 if(my_thread_id == nthread) {
-                    fprintf(outfile, "%d,%f,%d,%d,", i, time, my_thread_id, sched_getcpu());
+                    fprintf(likwid_outfile, "%d,%f,%d,%d,", i, time, my_thread_id, sched_getcpu());
                     for (int ev = 0; ev < nevents; ev++) {
-                        fprintf(outfile, ",%f", events[ev]);
+                        fprintf(likwid_outfile, ",%f", events[ev]);
                     }
-                    fprintf(outfile, "\n");
+                    fprintf(likwid_outfile, "\n");
                 }
                 #pragma omp barrier
             }
         }
-#else
+#endif
         gettimeofday(&after, NULL);
         double total_time = (after.tv_sec-before.tv_sec) + 1e-6*(after.tv_usec-before.tv_usec);
         fprintf(outfile, "%f\n", total_time);
-#endif
     }
 
     if(outfile != stdout)
@@ -92,6 +95,8 @@ int main(int argc, char* argv[]) {
     free_matrix(C);
 #ifdef LIKWID_PERFMON
     LIKWID_MARKER_CLOSE;
+    if(likwid_outfile != stdout)
+        fclose(likwid_outfile);
 #endif
     return 0;
 }
