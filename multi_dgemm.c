@@ -14,8 +14,7 @@ void syntax(char *exec_name) {
     exit(1);
 }
 
-int main(int argc, char* argv[])
-{
+int main(int argc, char* argv[]) {
     if (argc != 3 && argc != 4)
         syntax(argv[0]);
 
@@ -53,32 +52,31 @@ int main(int argc, char* argv[])
         #pragma omp parallel
         {
             LIKWID_MARKER_START("perf_dgemm");
-	}
+        }
 #else
         gettimeofday(&before, NULL);
 #endif
-	matrix_product(A, B, C, size);
+        matrix_product(A, B, C, size);
 #ifdef LIKWID_PERFMON
-	#pragma omp parallel
-	{
+        #pragma omp parallel
+        {
             LIKWID_MARKER_STOP("perf_dgemm");
-	    int nevents = 10;
-	    double events[10];
-	    double time;
-	    int count;
+            int nevents = 10;
+            double events[10];
+            double time;
+            int count;
             LIKWID_MARKER_GET("perf_dgemm", &nevents, events, &time, &count);
-	    int my_thread_id = omp_get_thread_num();
-	    for(int nthread = 0; nthread < omp_get_num_threads(); nthread++) {
+            int my_thread_id = omp_get_thread_num();
+            for(int nthread = 0; nthread < omp_get_num_threads(); nthread++) {
                 if(my_thread_id == nthread) {
-	            fprintf(outfile, "%d,%f,%d,%d,", i, time, my_thread_id, sched_getcpu());
-                    for (int ev = 0; ev < nevents; ev++)
-                    {
-	                fprintf(outfile, ",%f", events[ev]);
+                    fprintf(outfile, "%d,%f,%d,%d,", i, time, my_thread_id, sched_getcpu());
+                    for (int ev = 0; ev < nevents; ev++) {
+                        fprintf(outfile, ",%f", events[ev]);
                     }
-	            fprintf(outfile, "\n");
-		}
-		#pragma omp barrier
-	    }
+                    fprintf(outfile, "\n");
+                }
+                #pragma omp barrier
+            }
         }
 #else
         gettimeofday(&after, NULL);
