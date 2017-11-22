@@ -72,6 +72,11 @@ class Program(metaclass=abc.ABCMeta):
         pass
 
 class Disableable(Program):
+# TODO we need a more flexible approach, e.g. having an option --remove_os_noise={true|false|random}
+# Not sure of the best way to implement this with our architecture.
+# Adding an argument in the constructors? Or maybe a wrapper that randomly "hides" the wrapped class?
+# With the wrapper, we could then specify more complex behaviors. For instance, wrap a list of classes
+# that should be enabled/disabled at the same time (e.g. "all classes related to OS noise reduction).
     @property
     def enabled(self):
         return self.__enabled__
@@ -280,8 +285,8 @@ class RemoveOperatingSystemNoise(Disableable):
             self.cpubind = 'all'
         else:
             self.cpubind = str(random.randint(0, self.nb_cores))
-        return ['chrt', '--fifo', '99',
-                'numactl', '--physcpubind=%s' % self.cpubind, '--localalloc', # we have to choose between localalloc and membind, let's pick localalloc
+        return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
+                'numactl', '--physcpubind=%s' % self.cpubind, '--localalloc',   # we have to choose between localalloc and membind, let's pick localalloc
                 # also cannot use --touch option here, not sure to understand why
                 ]
 
@@ -303,7 +308,7 @@ class Likwid(Program):
             self.cpubind = '%d-%d' % (0, self.nb_cores)
         else:
             self.cpubind = str(random.randint(0, self.nb_cores))
-        return ['chrt', '--fifo', '99',
+        return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
                 'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-m'
                 ]
 
