@@ -294,12 +294,6 @@ class Likwid(Program):
             raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
 
-    def __header__(self):
-        return ['TODO']
-
-    def __data__(self):
-        return ['TODO']
-
     def __environment_variables__(self):
         # likwid handles the number of threads and the core pinning
         return {'LIKWID_FILENAME': self.tmp_filename}
@@ -312,6 +306,37 @@ class Likwid(Program):
         return ['chrt', '--fifo', '99',
                 'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-m'
                 ]
+
+class LikwidClock(Likwid):
+    def __init__(self, nb_threads):
+        super().__init__('CLOCK', nb_threads)
+
+    def __header__(self):
+        return ['TODO']
+
+    def __data__(self):
+        return ['TODO']
+
+class LikwidEnergy(Likwid):
+    def __init__(self, nb_threads):
+        super().__init__('ENERGY', nb_threads)
+
+    def __header__(self):
+        return ['TODO']
+
+    def __data__(self):
+        return ['TODO']
+
+def get_likwid_instance(group, nb_threads):
+    likwid_cls = {
+        'clock': LikwidClock,
+        'energy': LikwidEnergy,
+    }
+    try:
+        return likwid_cls[group](nb_threads)
+    except KeyError:
+        raise ValueError('This Likwid event group is not supported: %s.\nSupported values: %s.' % (group, list(likwid_cls.keys())))
+
 
 class Dgemm(Program):
     DgemmData = collections.namedtuple('DgemmData', ['call_index', 'size', 'nb_calls', 'time'])
