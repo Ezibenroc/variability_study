@@ -384,6 +384,40 @@ class Likwid(Program):
                     return float(val) * 1e9
             raise LikwidError('Did not find CPU clock in output.')
 
+    likwid_common = collections.namedtuple('LikwidCommon', ['cpu_clock', 'call_index', 'time', 'thread_index', 'core_index',
+        'real_freq', 'events'])
+
+    def parse_data(self, additive_indices):
+        data = []
+        with open(self.tmp_filename) as f:
+            reader = csv.reader(f)
+            for row in reader:
+                data.append([float(x) for x in row])
+        return self.process_data(data, additive_indices)
+
+    def process_data(self, data, additive_indices):
+        thread_index = 2
+        call_index = 0
+        additive_indices = {1,4,5,6} | set(additive_indices)      # those ones are always here
+        data.sort(key=lambda t: (t[thread_index], t[call_index])) # we group by thread, then by call, to have easier computations
+        old_entry = []
+        for i in range(len(data)):
+            new_entry = list(data[i])
+            if data[i][call_index] > 0:
+                assert data[i-1][thread_index] == data[i][thread_index]
+                assert data[i-1][call_index] == data[i][call_index]-1
+                for index in additive_indices:
+                    data[i][index] -= old_entry[index]
+            old_entry = new_entry
+        clock = self.get_cpu_clock()
+        data.sort(key=lambda t: (t[call_index], t[thread_index])) # now we group by call then by thread, because the data is distributed like this in the project
+        result = []
+        for entry in data:
+            real_freq = entry[5]/entry[6]*clock # see https://github.com/RRZE-HPC/likwid/blob/b8669dba1c5d8bf61cb0d4d4ff2c6fee31bf99ce/groups/ivybridgeEP/UNCORECLOCK.txt#L45
+            result.append(self.likwid_common(clock, int(entry[0]), entry[1], int(entry[2]),
+                int(entry[3]), real_freq, entry[4:]))
+        return result
+
 class LikwidClock(Likwid):
     def __init__(self, nb_threads):
         super().__init__('CLOCK', nb_threads)
@@ -392,7 +426,7 @@ class LikwidClock(Likwid):
         return ['TODO']
 
     def __data__(self):
-        print(self.get_cpu_clock())
+        print('\n'.join(str(l) for l in super().parse_data([1])))
         return ['TODO']
 
 class LikwidEnergy(Likwid):
