@@ -61,65 +61,10 @@ class Program(metaclass=abc.ABCMeta):
     def __header__(self):
         pass
 
-    @classmethod
-    def data_info(cls, data):
-        def normalized_type(elt):
-            t = type(elt)
-            if t in (int, bool):
-                return float
-            return t
-        assert isinstance(data, (list, tuple))
-        types = tuple((normalized_type(elt) for elt in data))
-        last_level = all(t in (str, float) for t in types)
-        if last_level:
-            return 1, types
-        else:
-            elements = set([cls.data_info(elt) for elt in data])
-            assert len(elements) == 1
-            nb_levels, types = elements.pop()
-            return nb_levels+1, types
-
-    @classmethod
-    def __merge_data(cls, data1, level1, types1, data2, level2, types2):
-        if level1 > level2:
-            result = []
-            for d1 in data1:
-                result.append(cls.__merge_data(d1, level1-1, types1, data2, level2, types2))
-        elif level1 < level2:
-            result = []
-            for d2 in data2:
-                result.append(cls.__merge_data(data1, level1, types1, d2, level2-1, types2))
-        elif level1 == level2 and level1 > 1:
-            assert len(data1) == len(data2)
-            result = []
-            for i in range(len(data1)):
-                result.append(cls.__merge_data(data1[i], level1-1, types1, data2[i], level2-1, types2))
-        else:
-            assert level1 == level2 == 1
-            result = list(data1) + list(data2)
-        return result
-
-    @classmethod
-    def merge_data(cls, data1, data2):
-        level1, types1 = cls.data_info(data1)
-        level2, types2 = cls.data_info(data2)
-        return cls.__merge_data(data1, level1, types1, data2, level2, types2)
-
-    @classmethod
-    def flatten_data(cls, data):
-        if len(data) == 0:
-            return iter([])
-        if isinstance(data[0], (tuple, list)):
-            for elt in data:
-                yield from cls.flatten_data(elt)
-        else:
-            yield data
-
     @property
     def data(self):
         data = self.__data__()
-        level, types = self.data_info(data)
-        assert len(types) == len(self.header)
+        assert len(data) == len(self.header)
         return data
 
     @abc.abstractmethod
@@ -323,7 +268,7 @@ class RemoveOperatingSystemNoise(Disableable):
         super().__init__()
         self.nb_cores = psutil.cpu_count()
         if nb_threads not in (1, self.nb_cores):
-            raise ValueError('Wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
+            raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
 
     def __header__(self):
@@ -339,14 +284,11 @@ class RemoveOperatingSystemNoise(Disableable):
         if self.nb_threads == self.nb_cores:
             self.cpubind = 'all'
         else:
-            self.cpubind = str(random.randint(0, self.nb_cores-1))
+            self.cpubind = str(random.randint(0, self.nb_cores))
         return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
                 'numactl', '--physcpubind=%s' % self.cpubind, '--localalloc',   # we have to choose between localalloc and membind, let's pick localalloc
                 # also cannot use --touch option here, not sure to understand why
                 ]
-
-class LikwidError(Exception):
-    pass
 
 class Likwid(Program):
     def __init__(self, group, nb_threads):
@@ -354,9 +296,8 @@ class Likwid(Program):
         self.group = group
         self.nb_cores = psutil.cpu_count()
         if nb_threads not in (1, self.nb_cores):
-            raise ValueError('Wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
+            raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
-        self.tmp_output = os.path.join(self.tmp_dir.name, 'output.csv')
 
     def __environment_variables__(self):
         # likwid handles the number of threads and the core pinning
@@ -366,23 +307,10 @@ class Likwid(Program):
         if self.nb_threads == self.nb_cores:
             self.cpubind = '%d-%d' % (0, self.nb_cores)
         else:
-            self.cpubind = str(random.randint(0, self.nb_cores-1))
+            self.cpubind = str(random.randint(0, self.nb_cores))
         return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
-                'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m'
+                'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-m'
                 ]
-
-    def get_cpu_clock(self):
-        with open(self.tmp_output, 'r') as f:
-            reader = csv.reader(f)
-            for row in reader:
-                if row[0] == 'CPU clock:':
-                    try:
-                        val, unit = row[1].split()
-                        assert unit == 'GHz'
-                    except (ValueError, AssertionError):
-                        raise LikwidError('Wrong format for the CPU clock (got %s).' % row[1])
-                    return float(val) * 1e9
-            raise LikwidError('Did not find CPU clock in output.')
 
 class LikwidClock(Likwid):
     def __init__(self, nb_threads):
@@ -392,7 +320,6 @@ class LikwidClock(Likwid):
         return ['TODO']
 
     def __data__(self):
-        print(self.get_cpu_clock())
         return ['TODO']
 
 class LikwidEnergy(Likwid):
@@ -417,6 +344,7 @@ def get_likwid_instance(group, nb_threads):
 
 
 class Dgemm(Program):
+    DgemmData = collections.namedtuple('DgemmData', ['call_index', 'size', 'nb_calls', 'time'])
     def __init__(self, lib, size, nb_calls, nb_threads, block_size, likwid=None):
         super().__init__()
         self.lib = lib
@@ -438,7 +366,10 @@ class Dgemm(Program):
     def __data__(self):
         with open(self.tmp_filename, 'r') as f:
             times = f.readlines()
-        data = [(i, self.size, self.nb_calls, float(t)) for i, t in enumerate(times)]
+        data = self.DgemmData([], [self.size]*len(times), [self.nb_calls]*len(times), [])
+        for call_index, t in enumerate(times):
+            data.call_index.append(call_index)
+            data.time.append(float(t))
         return data
 
 class ExpEngine:
@@ -480,10 +411,13 @@ class ExpEngine:
 
     @property
     def data(self):
-        all_data = []
-        for prog in self.programs:
-            all_data = Program.merge_data(all_data, prog.data)
-        return all_data
+        wrapper_data = [wrap.data for wrap in self.wrappers]
+        app_data = self.application.data
+        data = []
+        for i in range(len(app_data[0])):
+            entry = [*wrapper_data, [d[i] for d in app_data]]
+            data.append(list(itertools.chain(*entry)))
+        return data
 
     def run(self):
         os.environ.clear()
@@ -499,7 +433,7 @@ class ExpEngine:
             for run_index in range(nb_runs):
                 self.randomly_enable()
                 self.run()
-                for line in Program.flatten_data(self.data):
+                for line in self.data:
                     writer.writerow([run_index] + line)
         if compress:
             zip_name = os.path.splitext(csv_filename)[0] + '.zip'

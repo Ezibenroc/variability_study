@@ -46,7 +46,7 @@ class MockApplication(MockProgram):
         return ['header_app_1', 'header_app_2', 'header_app_3']
 
     def __data__(self):
-        return [['data_1:1', 'data_1:2', 'data_1:3'], ['data_2:1', 'data_2:2', 'data_2:3']]
+        return [['data_1:1', 'data_1:2'], ['data_2:1', 'data_2:2'], ['data_3:1', 'data_3:2']]
 
 class BasicProgramTest(unittest.TestCase):
     def test_basic(self):
@@ -85,51 +85,6 @@ class BasicProgramTest(unittest.TestCase):
                 data = prog.data
             prog = self.WrongMockProgram(1)
             data = prog.data
-
-    def test_data_info(self):
-        data_info = MockProgram.data_info
-        self.assertEqual(data_info([]), (1, ()))
-        self.assertEqual(data_info([3.14, 27, 'foo']), (1, (float, float, str)))
-        self.assertEqual(data_info([[]]), (2, ()))
-        self.assertEqual(data_info([[3.14, 27, 'foo']]), (2, (float, float, str)))
-        self.assertEqual(data_info([[3.14, 27, 'foo'], [1, 2.7, 'bar']]), (2, (float, float, str)))
-        self.assertEqual(data_info([[[]]]), (3, ()))
-        self.assertEqual(data_info([[[3.14, 27, 'foo'], [1, 2.7, 'bar']]]), (3, (float, float, str)))
-        self.assertEqual(data_info([[[3.14, 27, 'foo'], [1, 2.7, 'bar']], [[0, 1, 'a'], [1, 2, 'b']], [[-1, -2, 'z'], [-2, -3, 'y']]]), (3, (float, float, str)))
-
-    def test_wrong_data_info(self):
-        data_info = MockProgram.data_info
-        with self.assertRaises(AssertionError):
-            data_info(42)
-        with self.assertRaises(AssertionError):
-            data_info({})
-        with self.assertRaises(AssertionError):
-            data_info([[],3])
-        with self.assertRaises(AssertionError):
-            data_info([['a'],[3]])
-        with self.assertRaises(AssertionError):
-            data_info([[],[3]])
-
-    def test_merge_data(self):
-        merge = MockProgram.merge_data
-        self.assertEqual(merge([], []), [])
-        self.assertEqual(merge([[[[]]]], []), [[[[]]]])
-        self.assertEqual(merge([], [[[[]]]]), [[[[]]]])
-        self.assertEqual(merge([[[[], []]]], []), [[[[], []]]])
-        self.assertEqual(merge([3], []), [3])
-        self.assertEqual(merge([], [3]), [3])
-        self.assertEqual(merge(['a', 'b'], [3]), ['a', 'b', 3])
-        self.assertEqual(merge([['a'], ['b']], [3, 4, 5]), [['a', 3, 4, 5], ['b', 3, 4, 5]])
-        self.assertEqual(merge([3, 4, 5], [['a'], ['b']]), [[3, 4, 5, 'a'], [3, 4, 5, 'b']])
-
-    def test_flatten_data(self):
-        flatten = lambda l: list(MockProgram.flatten_data(l))
-        self.assertEqual(flatten([1, 2, 3]), [[1, 2, 3]])
-        self.assertEqual(flatten([[1, 2], [3,4]]), [[1, 2], [3, 4]])
-        self.assertEqual(flatten([[[1, 2]], [[3,4]]]), [[1, 2], [3, 4]])
-        self.assertEqual(flatten([[[[1, 2]]], [[[3,4]]]]), [[1, 2], [3, 4]])
-        self.assertEqual(flatten([[[[1, 2], ['a', 'b']]], [[[3,4], ['c', 'd']]]]), [[1, 2], ['a', 'b'], [3, 4], ['c', 'd']])
-        self.assertEqual(flatten([[[[1, 2]], [['a', 'b']]], [[[3,4]], [['c', 'd']]]]), [[1, 2], ['a', 'b'], [3, 4], ['c', 'd']])
 
 class SpecialProgramTest(unittest.TestCase):
 
@@ -183,7 +138,7 @@ class ExpEngineTest(unittest.TestCase):
                     self.assertEqual(wrap.data[i], entry[index])
             for i, h in enumerate(self.application.header):
                 index = self.expengine.header.index(h)
-                self.assertEqual(self.application.data[entry_id][i], entry[index])
+                self.assertEqual(self.application.data[i][entry_id], entry[index])
 
 
     def test_enable(self):

@@ -79,7 +79,7 @@ def run_command(args, get_stat=False, wrapper=None):
     process = Popen(args, stdout=PIPE, stderr=PIPE)
     output = process.communicate()
     if process.wait() != 0:
-        error('with command: %s\n%s' % (' '.join(args), output[1].decode('utf8')))
+        error('with command: %s' % ' '.join(args))
     if get_stat:
         stat = parse_stat(output[1])
     else:
