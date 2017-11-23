@@ -11,6 +11,7 @@ import csv
 import zipfile
 import random
 import collections
+import pandas
 import cpuinfo # https://github.com/workhorsy/py-cpuinfo
 import git     # https://github.com/gitpython-developers/GitPython
 from multiprocessing import cpu_count
@@ -25,6 +26,8 @@ class Program(metaclass=abc.ABCMeta):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
         self.__enabled__ = True
+        self.data = pandas.DataFrame(columns=self.header + ['run_index'])
+        self.run_index = 0
 
     def __del__(self):
         self.tmp_dir.cleanup()
@@ -53,65 +56,21 @@ class Program(metaclass=abc.ABCMeta):
     def __environment_variables__(self):
         pass
 
-    @property
-    def header(self):
-        return self.__header__()
+    def fetch_data(self):
+        self.__fetch_data__()
+        self.run_index += 1
 
     @abc.abstractmethod
-    def __header__(self):
+    def __fetch_data__(self):
         pass
 
-    @property
-    def data(self):
-        data = self.__data__()
-        assert len(data) == len(self.header)
-        return data
+    def __append_data__(self, data):
+        data['run_index'] = self.run_index
+        self.data.loc[len(self.data)] = data
 
-    @abc.abstractmethod
-    def __data__(self):
-        pass
-
-class Disableable(Program):
-# TODO we need a more flexible approach, e.g. having an option --remove_os_noise={true|false|random}
-# Not sure of the best way to implement this with our architecture.
-# Adding an argument in the constructors? Or maybe a wrapper that randomly "hides" the wrapped class?
-# With the wrapper, we could then specify more complex behaviors. For instance, wrap a list of classes
-# that should be enabled/disabled at the same time (e.g. "all classes related to OS noise reduction).
-    @property
-    def enabled(self):
-        return self.__enabled__
-
-    @enabled.setter
-    def enabled(self, value):
-        assert value in (True, False)
-        self.__enabled__ = value
-
-    @property
-    def command_line(self):
-        if self.enabled:
-            return self.__command_line__()
-        else:
-            return []
-
-    @property
-    def environment_variables(self):
-        if self.enabled:
-            return self.__environment_variables__()
-        else:
-            return {}
-
-    @property
-    def header(self):
-        enabled_name = self.__class__.__name__
-        return self.__header__() + [enabled_name]
-
-    @property
-    def data(self):
-        if self.enabled:
-            data = self.__data__()
-        else:
-            data = ['N/A']*(len(self.header)-1)
-        return data + [self.enabled]
+class DisableWrapper(Program):
+    pass
+    #TODO implement me
 
 class PurePythonProgram(Program):
     def __command_line__(self):
@@ -121,14 +80,11 @@ class PurePythonProgram(Program):
         return {}
 
 class NoDataProgram(Program):
-    def __header__(self):
-        return []
-
-    def __data__(self):
-        return []
-
+    def __fetch_data__(self):
+        pass
 
 class Intercoolr(Program):
+    header = ['energy']
     def __init__(self):
         super().__init__()
         run_command(['make', '-C', 'intercoolr'])
@@ -140,80 +96,74 @@ class Intercoolr(Program):
     def __environment_variables__(self):
         return {}
 
-    def __header__(self):
-        return ['energy']
-
-    def __data__(self):
+    def get_energy(self):
         with open(self.tmp_filename) as f:
             for line in f:
                 m = self.reg.match(line)
                 if m is not None:
-                    return [float(line[m.end():])]
+                    return float(line[m.end():])
+
+    def __fetch_data__(self):
+        energy = self.get_energy()
+        self.__append_data__({'energy': energy})
 
 class CommandLine(PurePythonProgram):
+    header = ['git_hash', 'command_line']
     def __init__(self):
         super().__init__()
         self.hash = git.Repo(search_parent_directories=True).head.object.hexsha
         self.cmd = ' '.join(sys.argv)
 
-    def __header__(self):
-        return ['git_hash', 'command_line']
-
-    def __data__(self):
-        return [self.hash, self.cmd]
-
+    def __fetch_data__(self):
+        self.__append_data__({'git_hash': self.hash, 'command_line': self.cmd})
 
 class Date(PurePythonProgram):
-    def __header__(self):
-        return ['date', 'hour']
+    header = ['date', 'hour']
 
-    def __data__(self):
+    def __fetch_data__(self):
         date = time.strftime("%Y/%m/%d")
         hour = time.strftime("%H:%M:%S")
-        return [date, hour]
+        self.__append_data__({'date': date, 'hour': hour})
 
 class Platform(PurePythonProgram):
+    header = ['hostname', 'os']
     def __init__(self):
         super().__init__()
         self.hostname = platform.node()
         self.os = platform.platform()
 
-    def __header__(self):
-        return ['hostname', 'os']
-
-    def __data__(self):
-        return [self.hostname, self.os]
+    def __fetch_data__(self):
+        self.__append_data__({'hostname': self.hostname, 'os': self.os})
 
 class CPU(PurePythonProgram):
-    def __header__(self):
-        return ['cpu_model',
-                'nb_cores',
-                'advertised_frequency',
-                'current_frequency',
-                'cache_size',
+    header = ['cpu_model',
+              'nb_cores',
+              'advertised_frequency',
+              'current_frequency',
+              'cache_size',
             ]
 
-    def __data__(self):
+    def __fetch_data__(self):
         self.cpuinfo = cpuinfo.get_cpu_info()
         cache_size = self.cpuinfo['l2_cache_size']
         cache_size = cache_size.split()
         assert len(cache_size) == 2 and cache_size[1] == 'KB'
         self.cpuinfo['l2_cache_size'] = int(cache_size[0])*1000
-        return [self.cpuinfo['brand'],
-                self.cpuinfo['count'],
-                self.cpuinfo['hz_advertised_raw'][0],
-                self.cpuinfo['hz_actual_raw'][0],
-                self.cpuinfo['l2_cache_size'],
-            ]
+        self.__append_data__({'cpu_model': self.cpuinfo['brand'],
+                            'nb_cores':  self.cpuinfo['count'],
+                            'advertised_frequency': self.cpuinfo['hz_advertised_raw'][0],
+                            'current_frequency': self.cpuinfo['hz_actual_raw'][0],
+                            'cache_size': self.cpuinfo['l2_cache_size'],
+                            })
+
 
 class Temperature(PurePythonProgram):
-    def __header__(self):
-        return ['average_temperature']
+    header = ['average_temperature']
 
-    def __data__(self):
+    def __fetch_data__(self):
         temperatures = [temp.current for temp in psutil.sensors_temperatures()['coretemp'] if temp.label.startswith('Core')]
         assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
-        return [mean(temperatures)]
+        return self.__append_data__({'average_temperature': mean(temperatures)})
 
 class Perf(Program):
     metrics = ['context-switches',
@@ -233,6 +183,8 @@ class Perf(Program):
                 'iTLB-loads',
                 'iTLB-load-misses',
             ]
+    header = [m.replace('-', '_') for m in metrics]
+    metric_to_header = {m:m.replace('-', '_') for m in metrics}
 
     def __command_line__(self):
         return ['perf', 'stat', '-ddd', '-x,', '-o', self.tmp_filename]
@@ -240,13 +192,10 @@ class Perf(Program):
     def __environment_variables__(self):
         return {'LC_TIME' : 'en'} # perf uses locale to display numbers, which is very annoying
 
-    def __header__(self):
-        return [m.replace('-', '_') for m in self.metrics]
-
-    def __data__(self):
+    def __fetch_data__(self):
         with open(self.tmp_filename) as f:
             lines = list(csv.reader(f))
-        data = []
+        data = dict()
         metrics_to_handle = set(self.metrics)
         for line in lines[2:]:
             if line[2] in metrics_to_handle:
@@ -258,24 +207,19 @@ class Perf(Program):
                         result = float(result)
                     except ValueError:
                         pass
-                data.append(result)
+                data[self.metric_to_header[line[2]]] = result
                 metrics_to_handle.remove(line[2])
         assert len(metrics_to_handle) == 0
-        return data
+        self.__append_data__(data)
 
-class RemoveOperatingSystemNoise(Disableable):
+class RemoveOperatingSystemNoise(Program):#Disableable):
+    header = ['cpubind']
     def __init__(self, nb_threads):
         super().__init__()
         self.nb_cores = psutil.cpu_count()
         if nb_threads not in (1, self.nb_cores):
             raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
-
-    def __header__(self):
-        return ['cpubind']
-
-    def __data__(self):
-        return [self.cpubind]
 
     def __environment_variables__(self):
         return {'OMP_PROc_BIND' : 'TRUE'}
@@ -289,6 +233,9 @@ class RemoveOperatingSystemNoise(Disableable):
                 'numactl', '--physcpubind=%s' % self.cpubind, '--localalloc',   # we have to choose between localalloc and membind, let's pick localalloc
                 # also cannot use --touch option here, not sure to understand why
                 ]
+
+    def __fetch_data__(self):
+        self.__append_data__({'cpubind': self.cpubind})
 
 class Likwid(Program):
     def __init__(self, group, nb_threads):
@@ -344,6 +291,7 @@ def get_likwid_instance(group, nb_threads):
 
 
 class Dgemm(Program):
+    header = ['call_index', 'size', 'nb_calls', 'time']
     DgemmData = collections.namedtuple('DgemmData', ['call_index', 'size', 'nb_calls', 'time'])
     def __init__(self, lib, size, nb_calls, nb_threads, block_size, likwid=None):
         super().__init__()
@@ -360,17 +308,12 @@ class Dgemm(Program):
     def __command_line__(self):
         return ['./multi_dgemm', str(self.nb_calls), str(self.size), self.tmp_filename]
 
-    def __header__(self):
-        return ['call_index', 'size', 'nb_calls', 'time']
-
-    def __data__(self):
+    def __fetch_data__(self):
         with open(self.tmp_filename, 'r') as f:
             times = f.readlines()
         data = self.DgemmData([], [self.size]*len(times), [self.nb_calls]*len(times), [])
         for call_index, t in enumerate(times):
-            data.call_index.append(call_index)
-            data.time.append(float(t))
-        return data
+            self.__append_data__({'call_index': call_index, 'size': self.size, 'nb_calls': self.nb_calls, 'time': t})
 
 class ExpEngine:
     def __init__(self, application, wrappers):
@@ -433,8 +376,14 @@ class ExpEngine:
             for run_index in range(nb_runs):
                 self.randomly_enable()
                 self.run()
-                for line in self.data:
-                    writer.writerow([run_index] + line)
+                for prog in self.programs:
+                    prog.fetch_data()
+#                for line in self.data:
+#                    writer.writerow([run_index] + line)
+        for prog in self.programs:
+            print(prog.__class__.__name__)
+            print(prog.data)
+            print()
         if compress:
             zip_name = os.path.splitext(csv_filename)[0] + '.zip'
             with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as myzip:
