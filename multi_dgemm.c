@@ -73,7 +73,7 @@ int main(int argc, char* argv[]) {
             int my_thread_id = omp_get_thread_num();
             for(int nthread = 0; nthread < omp_get_num_threads(); nthread++) {
                 if(my_thread_id == nthread) {
-                    fprintf(likwid_outfile, "%d,%f,%d,%d", i, time, my_thread_id, sched_getcpu());
+                    fprintf(likwid_outfile, "%d,%f,%d,%d,", i, time, my_thread_id, sched_getcpu());
                     for (int ev = 0; ev < nevents; ev++) {
                         fprintf(likwid_outfile, ",%f", events[ev]);
                     }
