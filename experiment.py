@@ -253,6 +253,7 @@ class RemoveOperatingSystemNoise(Program):#Disableable):
         self.__append_data__({'cpubind': self.cpubind})
 
 class Likwid(Program):
+    keys = ['run_index', 'call_index', 'thread_index']
     def __init__(self, group, nb_threads):
         super().__init__()
         self.group = group
@@ -260,6 +261,7 @@ class Likwid(Program):
         if nb_threads not in (1, self.nb_cores):
             raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
+        self.tmp_output = os.path.join(self.tmp_dir.name, 'output.csv')
 
     def __environment_variables__(self):
         # likwid handles the number of threads and the core pinning
@@ -271,28 +273,49 @@ class Likwid(Program):
         else:
             self.cpubind = str(random.randint(0, self.nb_cores))
         return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
-                'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-m'
+                'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m'
                 ]
+    def get_cpu_clock(self):
+        with open(self.tmp_output, 'r') as f:
+            reader = csv.reader(f)
+            for row in reader:
+                if row[0] == 'CPU clock:':
+                    try:
+                        val, unit = row[1].split()
+                        assert unit == 'GHz'
+                    except (ValueError, AssertionError):
+                        raise LikwidError('Wrong format for the CPU clock (got %s).' % row[1])
+                    return float(val) * 1e9
+            raise LikwidError('Did not find CPU clock in output.')
+
+    def __fetch_data__(self):
+        clock = self.get_cpu_clock()
+        with open(self.tmp_filename) as f:
+            reader = csv.reader(f)
+            for row in reader:
+                assert len(row) == len(self.header)-1
+                entry = {'cpu_clock': clock}
+                for i in range(1, len(self.header)): # start from 1 because 0 is the cpu_clock
+                    h = self.header[i]
+                    cls = self.types[i]
+                    entry[h] = cls(float(row[i-1]))
+                self.__append_data__(entry)
 
 class LikwidClock(Likwid):
+    header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_DRAM_ENERGY', 'UNCORE_CLOCK']
+    types  = [float, int, float, int, int, *[int]*3, *[float]*3]
+
     def __init__(self, nb_threads):
         super().__init__('CLOCK', nb_threads)
 
-    def __header__(self):
-        return ['TODO']
-
-    def __data__(self):
-        return ['TODO']
 
 class LikwidEnergy(Likwid):
+    header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'TEMP_CORE', 'PWR_PKG_ENERGY', 'PWR_PP0_ENERGY', 'PWR_PP1_ENERGY', 'PWR_DRAM_ENERGY']
+    types  = [float, int, float, int, int, *[int]*4, *[float]*4]
+
     def __init__(self, nb_threads):
         super().__init__('ENERGY', nb_threads)
 
-    def __header__(self):
-        return ['TODO']
-
-    def __data__(self):
-        return ['TODO']
 
 def get_likwid_instance(group, nb_threads):
     likwid_cls = {
