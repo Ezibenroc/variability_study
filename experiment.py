@@ -22,6 +22,7 @@ def mean(l):
     return sum(l)/len(l)
 
 class Program(metaclass=abc.ABCMeta):
+    key = ['run_index']
     def __init__(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
@@ -67,6 +68,20 @@ class Program(metaclass=abc.ABCMeta):
     def __append_data__(self, data):
         data['run_index'] = self.run_index
         self.data.loc[len(self.data)] = data
+
+    @staticmethod
+    def __merge_data__(df1, df2, key):
+        return df1.join(df2.set_index(key), on=key)
+
+    def merge_data(self, other_data):
+        for i in range(len(self.key), 0, -1):
+            key = self.key[0:i]
+            try:
+                return self.__merge_data__(self.data, other_data, key)
+            except KeyError: # the last part of this key (e.g. call_index) is not present yet in the aggregate, let's just add it
+                continue
+        # Merging without key
+        return self.data.join(other_data)
 
 class DisableWrapper(Program):
     pass
@@ -292,7 +307,8 @@ def get_likwid_instance(group, nb_threads):
 
 class Dgemm(Program):
     header = ['call_index', 'size', 'nb_calls', 'time']
-    DgemmData = collections.namedtuple('DgemmData', ['call_index', 'size', 'nb_calls', 'time'])
+    key = ['run_index', 'call_index']
+
     def __init__(self, lib, size, nb_calls, nb_threads, block_size, likwid=None):
         super().__init__()
         self.lib = lib
@@ -311,7 +327,6 @@ class Dgemm(Program):
     def __fetch_data__(self):
         with open(self.tmp_filename, 'r') as f:
             times = f.readlines()
-        data = self.DgemmData([], [self.size]*len(times), [self.nb_calls]*len(times), [])
         for call_index, t in enumerate(times):
             self.__append_data__({'call_index': call_index, 'size': self.size, 'nb_calls': self.nb_calls, 'time': t})
 
@@ -370,20 +385,16 @@ class ExpEngine:
 
     def run_all(self, csv_filename, nb_runs, compress=False):
         with open(csv_filename, 'w') as f:
-            writer = csv.writer(f)
-            header = ['run_index'] + self.header
-            writer.writerow(header)
             for run_index in range(nb_runs):
                 self.randomly_enable()
                 self.run()
                 for prog in self.programs:
                     prog.fetch_data()
-#                for line in self.data:
-#                    writer.writerow([run_index] + line)
+        all_data = pandas.DataFrame()
         for prog in self.programs:
-            print(prog.__class__.__name__)
-            print(prog.data)
-            print()
+            all_data = prog.merge_data(all_data)
+        with open(csv_filename, 'w') as f:
+            f.write(all_data.to_csv())
         if compress:
             zip_name = os.path.splitext(csv_filename)[0] + '.zip'
             with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as myzip:
