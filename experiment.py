@@ -83,6 +83,9 @@ class Program(metaclass=abc.ABCMeta):
         # Merging without key
         return self.data.join(other_data)
 
+    def post_process(self):
+        pass
+
 class DisableWrapper(Program):
     pass
     #TODO implement me
@@ -301,9 +304,21 @@ class Likwid(Program):
                     entry[h] = cls(float(row[i-1]))
                 self.__append_data__(entry)
 
+    def __decumulate__(self):
+        colnames = [self.header[i] for i in self.cumulative_indexes]
+        df = self.data.set_index(['run_index', 'call_index', 'thread_index'])[colnames]
+        df = df.groupby(level=['run_index', 'thread_index']).diff().fillna(df).reset_index()
+        self.data.update(df)
+
+    def post_process(self):
+        self.__decumulate__()
+        # https://github.com/RRZE-HPC/likwid/blob/b8669dba1c5d8bf61cb0d4d4ff2c6fee31bf99ce/groups/ivybridgeEP/UNCORECLOCK.txt#L45
+        self.data['likwid_frequency'] = self.data['CPU_CLK_UNHALTED_CORE']/self.data['CPU_CLK_UNHALTED_REF']*self.data['cpu_clock']
+
 class LikwidClock(Likwid):
     header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_DRAM_ENERGY', 'UNCORE_CLOCK']
     types  = [float, int, float, int, int, *[int]*3, *[float]*3]
+    cumulative_indexes = [2,5,6,7,8,9]
 
     def __init__(self, nb_threads):
         super().__init__('CLOCK', nb_threads)
@@ -312,6 +327,7 @@ class LikwidClock(Likwid):
 class LikwidEnergy(Likwid):
     header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'TEMP_CORE', 'PWR_PKG_ENERGY', 'PWR_PP0_ENERGY', 'PWR_PP1_ENERGY', 'PWR_DRAM_ENERGY']
     types  = [float, int, float, int, int, *[int]*4, *[float]*4]
+    cumulative_indexes = [2,5,6,7,9,10,11,12]
 
     def __init__(self, nb_threads):
         super().__init__('ENERGY', nb_threads)
@@ -415,6 +431,7 @@ class ExpEngine:
                     prog.fetch_data()
         all_data = pandas.DataFrame()
         for prog in self.programs:
+            prog.post_process()
             all_data = prog.merge_data(all_data)
         with open(csv_filename, 'w') as f:
             f.write(all_data.to_csv())
