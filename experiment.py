@@ -277,7 +277,7 @@ class RemoveOperatingSystemNoise(Program):#Disableable):
         if self.nb_threads == self.nb_cores:
             self.cpubind = 'all'
         else:
-            self.cpubind = str(random.randint(0, self.nb_cores))
+            self.cpubind = str(random.randint(0, self.nb_cores-1))
         return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
                 'numactl', '--physcpubind=%s' % self.cpubind, '--localalloc',   # we have to choose between localalloc and membind, let's pick localalloc
                 # also cannot use --touch option here, not sure to understand why
@@ -317,9 +317,9 @@ class Likwid(Program):
 
     def __command_line__(self):
         if self.nb_threads == self.nb_cores:
-            self.cpubind = '%d-%d' % (0, self.nb_cores)
+            self.cpubind = '%d-%d' % (0, self.nb_cores-1)
         else:
-            self.cpubind = str(random.randint(0, self.nb_cores))
+            self.cpubind = str(random.randint(0, self.nb_cores-1))
         return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
                 'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m'
                 ]
@@ -357,6 +357,7 @@ class Likwid(Program):
         except AttributeError:
             self.get_available_events()
             self.header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index'] + self.events
+            self.cumulative_values = list(set(self.cumulative_values) & set(self.events))
             self.data = pandas.DataFrame(columns=self.header + ['run_index'])
 
     def __fetch_data__(self):
@@ -384,14 +385,12 @@ class Likwid(Program):
 
 class LikwidClock(Likwid):
     cumulative_values = ['likwid_time', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_DRAM_ENERGY']
-    int_values = ['call_index', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF']
 
     def __init__(self, nb_threads):
         super().__init__('CLOCK', nb_threads)
 
 class LikwidEnergy(Likwid):
     cumulative_values = ['likwid_time', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_PP0_ENERGY', 'PWR_DRAM_ENERGY']
-    int_values = ['call_index', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF']
 
     def __init__(self, nb_threads):
         super().__init__('ENERGY', nb_threads)
