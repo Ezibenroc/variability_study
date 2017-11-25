@@ -26,20 +26,12 @@ class Program(metaclass=abc.ABCMeta):
     def __init__(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
-        self.__enabled__ = True
         self.data = pandas.DataFrame(columns=self.header + ['run_index'])
         self.run_index = 0
+        self.enabled = True
 
     def __del__(self):
         self.tmp_dir.cleanup()
-
-    @property
-    def enabled(self):
-        return True
-
-    @enabled.setter
-    def enabled(self, value):
-        pass
 
     @property
     def command_line(self):
@@ -86,9 +78,48 @@ class Program(metaclass=abc.ABCMeta):
     def post_process(self):
         pass
 
+class ComposeWrapper(Program):
+    def __init__(self, *programs):
+        self.programs = programs
+
+    def __command_line__(self):
+        cmd = []
+        for prog in self.programs:
+            cmd.extend(prog.command_line)
+        return cmd
+
+    def __environment_variables__(self):
+        env = dict()
+        for prog in self.programs:
+            env.update(prog)
+        return env
+
+    def __fetch_data__(self):
+        for prog in self.programs:
+            prog.fetch_data()
+
+
 class DisableWrapper(Program):
-    pass
-    #TODO implement me
+    def __init__(self, program):
+        self.program = program
+
+    def __command_line__(self):
+        if self.enabled:
+            return self.program.command_line
+        else:
+            return []
+
+    def __environment_variables__(self):
+        if self.enabled:
+            return self.program.environment_variables
+        else:
+            return dict()
+
+    def __fetch_data__(self):
+        if self.enabled:
+            self.program.fetch_data()
+        else:
+            self.__append_data__({h : 'N/A' for h in self.header})
 
 class PurePythonProgram(Program):
     def __command_line__(self):
