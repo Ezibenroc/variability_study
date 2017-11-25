@@ -286,6 +286,9 @@ class RemoveOperatingSystemNoise(Program):#Disableable):
     def __fetch_data__(self):
         self.__append_data__({'cpubind': self.cpubind})
 
+class LikwidError(Exception):
+    pass
+
 class Likwid(Program):
     keys = ['run_index', 'call_index', 'thread_index']
     def __init__(self, group, nb_threads):
@@ -296,6 +299,16 @@ class Likwid(Program):
             raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
         self.tmp_output = os.path.join(self.tmp_dir.name, 'output.csv')
+        self.check_group()
+
+    def check_group(self):
+        stdout, stderr = run_command(['likwid-perfctr', '-a'])
+        stdout = stdout.decode('ascii')
+        lines = stdout.split('\n')[2:]
+        lines = [line.strip().split() for line in lines]
+        groups = [line[0] for line in lines if len(line) > 0]
+        if self.group not in groups:
+            raise LikwidError('Group %s not available on this machine.\nAvailable groups: %s.' % (self.group, groups))
 
     def __environment_variables__(self):
         # likwid handles the number of threads and the core pinning
