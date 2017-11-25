@@ -291,6 +291,7 @@ class LikwidError(Exception):
 
 class Likwid(Program):
     keys = ['run_index', 'call_index', 'thread_index']
+    header = []
     def __init__(self, group, nb_threads):
         super().__init__()
         self.group = group
@@ -335,7 +336,31 @@ class Likwid(Program):
                     return float(val) * 1e9
             raise LikwidError('Did not find CPU clock in output.')
 
+    def get_available_events(self):
+        with open(self.tmp_output, 'r') as f:
+            reader = csv.reader(f)
+            in_events = False
+            self.events = []
+            for row in reader:
+                if in_events:
+                    if row[0] == 'TABLE' and row[1].startswith('Region'):
+                        return
+                    else:
+                        self.events.append(row[0])
+                elif row[0] == 'Event' and row[1] == 'Counter' and row[2].startswith('Core'):
+                    in_events = True
+        raise LikwidError('Wrong CSV format, could not identify events.')
+
+    def __init_data__(self):
+        try:
+            self.events
+        except AttributeError:
+            self.get_available_events()
+            self.header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index'] + self.events
+            self.data = pandas.DataFrame(columns=self.header + ['run_index'])
+
     def __fetch_data__(self):
+        self.__init_data__()
         clock = self.get_cpu_clock()
         with open(self.tmp_filename) as f:
             reader = csv.reader(f)
@@ -344,13 +369,11 @@ class Likwid(Program):
                 entry = {'cpu_clock': clock}
                 for i in range(1, len(self.header)): # start from 1 because 0 is the cpu_clock
                     h = self.header[i]
-                    cls = self.types[i]
-                    entry[h] = cls(float(row[i-1]))
+                    entry[h] = float(row[i-1])
                 self.__append_data__(entry)
 
     def __decumulate__(self):
-        colnames = [self.header[i] for i in self.cumulative_indexes]
-        df = self.data.set_index(['run_index', 'call_index', 'thread_index'])[colnames]
+        df = self.data.set_index(['run_index', 'call_index', 'thread_index'])[self.cumulative_values]
         df = df.groupby(level=['run_index', 'thread_index']).diff().fillna(df).reset_index()
         self.data.update(df)
 
@@ -360,18 +383,15 @@ class Likwid(Program):
         self.data['likwid_frequency'] = self.data['CPU_CLK_UNHALTED_CORE']/self.data['CPU_CLK_UNHALTED_REF']*self.data['cpu_clock']
 
 class LikwidClock(Likwid):
-    header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_DRAM_ENERGY', 'UNCORE_CLOCK']
-    types  = [float, int, float, int, int, *[int]*3, *[float]*3]
-    cumulative_indexes = [2,5,6,7,8,9]
+    cumulative_values = ['likwid_time', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_DRAM_ENERGY']
+    int_values = ['call_index', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF']
 
     def __init__(self, nb_threads):
         super().__init__('CLOCK', nb_threads)
 
-
 class LikwidEnergy(Likwid):
-    header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'TEMP_CORE', 'PWR_PKG_ENERGY', 'PWR_PP0_ENERGY', 'PWR_PP1_ENERGY', 'PWR_DRAM_ENERGY']
-    types  = [float, int, float, int, int, *[int]*4, *[float]*4]
-    cumulative_indexes = [2,5,6,7,9,10,11,12]
+    cumulative_values = ['likwid_time', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_PP0_ENERGY', 'PWR_DRAM_ENERGY']
+    int_values = ['call_index', 'thread_index', 'core_index', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF']
 
     def __init__(self, nb_threads):
         super().__init__('ENERGY', nb_threads)
