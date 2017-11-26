@@ -357,7 +357,7 @@ class Likwid(Program):
         except AttributeError:
             self.get_available_events()
             self.header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index'] + self.events
-            self.cumulative_values = list(set(self.cumulative_values) & set(self.events))
+            self.cumulative_values = list(set(self.cumulative_values) & set(self.events)) + ['likwid_time']
             self.data = pandas.DataFrame(columns=self.header + ['run_index'])
 
     def __fetch_data__(self):
