@@ -62,20 +62,21 @@ int main(int argc, char* argv[]) {
         gettimeofday(&before, NULL);
         matrix_product(A, B, C, size);
 #ifdef LIKWID_PERFMON
+// See https://github.com/RRZE-HPC/likwid/issues/131 for the discussion about cumulative values.
         #pragma omp parallel
         {
             LIKWID_MARKER_STOP("perf_dgemm");
-            int nevents = 10;
-            double events[10];
+            int nevents = 0; // No need to fill the events array, so nevents is set to 0
             double time;
             int count;
-            LIKWID_MARKER_GET("perf_dgemm", &nevents, events, &time, &count);
+            LIKWID_MARKER_GET("perf_dgemm", &nevents, NULL, &time, &count);
             int my_thread_id = omp_get_thread_num();
             for(int nthread = 0; nthread < omp_get_num_threads(); nthread++) {
                 if(my_thread_id == nthread) {
-                    fprintf(likwid_outfile, "%d,%f,%d,%d", i, time, my_thread_id, sched_getcpu());
-                    for (int ev = 0; ev < nevents; ev++) {
-                        fprintf(likwid_outfile, ",%f", events[ev]);
+                    fprintf(likwid_outfile, "%d,%f,%d,%d", i, time, my_thread_id,
+                        likwid_getProcessorId());
+                    for (int ev = 0; ev < perfmon_getNumberOfEvents(0); ev++) {
+                        fprintf(likwid_outfile, ",%f", perfmon_getLastResult(0, ev, nthread));
                     }
                     fprintf(likwid_outfile, "\n");
                 }

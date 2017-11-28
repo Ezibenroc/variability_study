@@ -373,7 +373,6 @@ class Likwid(Program):
         except AttributeError:
             self.get_available_events()
             self.header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index'] + self.events
-            self.cumulative_values = list(set(self.cumulative_values) & set(self.events)) + ['likwid_time']
             self.data = pandas.DataFrame(columns=self.header + ['run_index'])
 
     def __fetch_data__(self):
@@ -390,7 +389,7 @@ class Likwid(Program):
                 self.__append_data__(entry)
 
     def __decumulate__(self):
-        df = self.data.set_index(['run_index', 'call_index', 'thread_index'])[self.cumulative_values]
+        df = self.data.set_index(['run_index', 'call_index', 'thread_index'])[['likwid_time']]
         df = df.groupby(level=['run_index', 'thread_index']).diff().fillna(df).reset_index()
         self.data.update(df)
 
@@ -400,14 +399,10 @@ class Likwid(Program):
         self.data['likwid_frequency'] = self.data['CPU_CLK_UNHALTED_CORE']/self.data['CPU_CLK_UNHALTED_REF']*self.data['cpu_clock']
 
 class LikwidClock(Likwid):
-    cumulative_values = ['likwid_time', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_DRAM_ENERGY']
-
     def __init__(self, nb_threads):
         super().__init__('CLOCK', nb_threads)
 
 class LikwidEnergy(Likwid):
-    cumulative_values = ['likwid_time', 'INSTR_RETIRED_ANY', 'CPU_CLK_UNHALTED_CORE', 'CPU_CLK_UNHALTED_REF', 'PWR_PKG_ENERGY', 'PWR_PP0_ENERGY', 'PWR_DRAM_ENERGY']
-
     def __init__(self, nb_threads):
         super().__init__('ENERGY', nb_threads)
 
