@@ -145,8 +145,8 @@ class Time(Program):
             output = f.readlines()[0]
         output = output.split()
         user = float(output[0])
-        sytem = float(output[1])
-        self.__append_data__({'user_time': user, 'system_time': sytem})
+        system = float(output[1])
+        self.__append_data__({'user_time': user, 'system_time': system})
 
 class Intercoolr(Program):
     header = ['energy']
