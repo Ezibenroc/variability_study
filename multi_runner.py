@@ -32,6 +32,7 @@ if __name__ == '__main__':
             Date(),
             Platform(),
             CPU(),
+            Time(),
     ]
     if args.likwid is None:
         wrappers.extend([

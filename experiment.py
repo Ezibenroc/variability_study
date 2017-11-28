@@ -132,6 +132,22 @@ class NoDataProgram(Program):
     def __fetch_data__(self):
         pass
 
+class Time(Program):
+    header = ['user_time', 'system_time']
+    def __command_line__(self):
+        return ['/usr/bin/time', '-o', self.tmp_filename]
+
+    def __environment_variables__(self):
+        return {'TIME': '%U %S'}
+
+    def __fetch_data__(self):
+        with open(self.tmp_filename) as f:
+            output = f.readlines()[0]
+        output = output.split()
+        user = float(output[0])
+        sytem = float(output[1])
+        self.__append_data__({'user_time': user, 'system_time': sytem})
+
 class Intercoolr(Program):
     header = ['energy']
     def __init__(self):
