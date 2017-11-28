@@ -43,8 +43,12 @@ def print_blue(msg):
 def print_green(msg):
     print_color(msg, GREEN_STR)
 
-def error(msg):
+def error(msg, stdout=None, stderr=None):
     sys.stderr.write('%sERROR: %s%s\n' % (RED_STR, msg, END_STR))
+    if stdout:
+        sys.stderr.write('\n%sstdout was:%s\n%s\n' % (RED_STR, END_STR, stdout))
+    if stderr:
+        sys.stderr.write('\n%sstderr was:%s\n%s\n' % (RED_STR, END_STR, stderr))
     sys.exit(1)
 
 def parse_stat_line(line):
@@ -79,7 +83,7 @@ def run_command(args, get_stat=False, wrapper=None):
     process = Popen(args, stdout=PIPE, stderr=PIPE)
     output = process.communicate()
     if process.wait() != 0:
-        error('with command: %s' % ' '.join(args))
+        error('with command: %s' % ' '.join(args), output[0].decode('utf8'), output[1].decode('utf8'))
     if get_stat:
         stat = parse_stat(output[1])
     else:
