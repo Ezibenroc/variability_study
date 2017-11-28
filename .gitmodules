@@ -1,3 +1,3 @@
-[submodule "intercoolr"]
-	path = intercoolr
-	url = https://github.com/coolr-hpc/intercoolr.git
+[submodule "cblas_tests/intercoolr"]
+	path = cblas_tests/intercoolr
+	url = https://github.com/Ezibenroc/intercoolr.git
