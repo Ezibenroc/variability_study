@@ -30,6 +30,15 @@ class Program(metaclass=abc.ABCMeta):
         self.run_index = 0
         self.enabled = True
 
+    @property
+    def enabled(self):
+        return self.__enabled__
+
+    @enabled.setter
+    def enabled(self, value):
+        assert value in (True, False)
+        self.__enabled__ = value
+
     def __del__(self):
         self.tmp_dir.cleanup()
 
@@ -81,6 +90,10 @@ class Program(metaclass=abc.ABCMeta):
 class ComposeWrapper(Program):
     def __init__(self, *programs):
         self.programs = programs
+        self.header = []
+        for prog in self.programs:
+            self.header.extend(prog.header)
+        super().__init__()
 
     def __command_line__(self):
         cmd = []
@@ -91,17 +104,30 @@ class ComposeWrapper(Program):
     def __environment_variables__(self):
         env = dict()
         for prog in self.programs:
-            env.update(prog)
+            env.update(prog.environment_variables)
         return env
 
     def __fetch_data__(self):
         for prog in self.programs:
             prog.fetch_data()
 
+    @property
+    def data(self):
+        all_data = pandas.DataFrame()
+        for prog in self.programs:
+            prog.post_process()
+            all_data = prog.merge_data(all_data)
+        return all_data
+
+    @data.setter
+    def data(self, df):
+        pass # a workaroud, necessary to implemnet the getter...
 
 class DisableWrapper(Program):
     def __init__(self, program):
         self.program = program
+        self.header = program.header
+        super().__init__()
 
     def __command_line__(self):
         if self.enabled:
@@ -120,6 +146,32 @@ class DisableWrapper(Program):
             self.program.fetch_data()
         else:
             self.__append_data__({h : 'N/A' for h in self.header})
+
+    @property
+    def data(self):
+        return self.program.data
+
+    @data.setter
+    def data(self, df):
+        pass # a workaroud, necessary to implemnet the getter...
+
+class OnlyOneWrapper(ComposeWrapper):
+    def __init__(self, *programs):
+        programs = [DisableWrapper(prog) for prog in programs]
+        super().__init__(*programs)
+
+    @property
+    def enabled(self):
+        return any(prog.enabled for prog in self.programs)
+
+    @enabled.setter
+    def enabled(self, value):
+        assert value in (True, False)
+        for prog in self.programs:
+            prog.enabled = False
+        if value:
+            self.current_prog = random.choice(self.programs)
+            self.current_prog.enabled = True
 
 class PurePythonProgram(Program):
     def __command_line__(self):
@@ -475,20 +527,6 @@ class ExpEngine:
         for prog in self.programs:
             env.update(prog.environment_variables)
         return env
-
-    @property
-    def header(self):
-        return list(itertools.chain(*[prog.header for prog in self.programs]))
-
-    @property
-    def data(self):
-        wrapper_data = [wrap.data for wrap in self.wrappers]
-        app_data = self.application.data
-        data = []
-        for i in range(len(app_data[0])):
-            entry = [*wrapper_data, [d[i] for d in app_data]]
-            data.append(list(itertools.chain(*entry)))
-        return data
 
     def run(self):
         os.environ.clear()
