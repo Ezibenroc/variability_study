@@ -23,19 +23,21 @@ def compare_row(control_rows, row, control_variables, excluded_variables, delta=
             continue
         minval = control_rows[var].min()
         maxval = control_rows[var].max()
+        real_value = row[var]
         try:
             min_expected = minval * (1-delta)
             max_expected = maxval * (1+delta)
-            real_value = row[var]
-            not_equal = (min_expected > real_value or max_expected < real_value)
+            if min_expected > real_value or max_expected < real_value:
+                sys.stderr.write('ERROR for key "%s"\n' % var)
+                sys.stderr.write('Expected a value in [%g, %g] (file %s), got %g (file %s, line %d)\n\n' % (min_expected, max_expected, control_rows['filename'].unique()[0], real_value, row['filename'], row['index']))
+                error += 1
         except TypeError: # non-numeric type
             if minval != maxval:
                 raise ValueError('Do not know what to compare, got different candidate values in the control dataset for field %s: %s and %s.' % (var, minval, maxval))
-            not_equal = minval != real_value
-        if min_expected > real_value or max_expected < real_value:
-            sys.stderr.write('ERROR for key "%s"\n' % var)
-            sys.stderr.write('Expected a value in [%g, %g] (file %s), got %g (file %s, line %d)\n\n' % (min_expected, max_expected, control_rows['filename'].unique()[0], real_value, row['filename'], row['index']))
-            error += 1
+            if minval != real_value:
+                sys.stderr.write('ERROR for key "%s"\n' % var)
+                sys.stderr.write('Expected a value equal to %s (file %s), got %s (file %s, line %d)\n\n' % (minval, control_rows['filename'].unique()[0], real_value, row['filename'], row['index']))
+                error += 1
     return error
 
 def compare(df, row, control_variables, excluded_variables):
