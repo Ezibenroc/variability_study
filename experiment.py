@@ -26,7 +26,6 @@ class Program(metaclass=abc.ABCMeta):
     def __init__(self):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
-        self.data = pandas.DataFrame(columns=self.header + ['run_index'])
         self.run_index = 0
         self.enabled = True
 
@@ -68,7 +67,10 @@ class Program(metaclass=abc.ABCMeta):
 
     def __append_data__(self, data):
         data['run_index'] = self.run_index
-        self.data.loc[len(self.data)] = data
+        try:
+            self.__data__.loc[len(self.__data__)] = data
+        except AttributeError:
+            self.__data__ = pandas.DataFrame({h:[v] for h, v in data.items()})
 
     @staticmethod
     def __merge_data__(df1, df2, key):
@@ -87,12 +89,16 @@ class Program(metaclass=abc.ABCMeta):
     def post_process(self):
         pass
 
+    @property
+    def data(self):
+        try:
+            return self.__data__
+        except AttributeError:
+            return pandas.DataFrame()
+
 class ComposeWrapper(Program):
     def __init__(self, *programs):
         self.programs = programs
-        self.header = []
-        for prog in self.programs:
-            self.header.extend(prog.header)
         super().__init__()
 
     def __command_line__(self):
@@ -112,6 +118,13 @@ class ComposeWrapper(Program):
             prog.fetch_data()
 
     @property
+    def header(self):
+        header = []
+        for prog in self.programs:
+            header.extend(prog.header)
+        return header
+
+    @property
     def data(self):
         all_data = pandas.DataFrame()
         for prog in self.programs:
@@ -126,7 +139,6 @@ class ComposeWrapper(Program):
 class DisableWrapper(Program):
     def __init__(self, program):
         self.program = program
-        self.header = program.header
         super().__init__()
 
     def __command_line__(self):
@@ -145,7 +157,12 @@ class DisableWrapper(Program):
         if self.enabled:
             self.program.fetch_data()
         else:
-            self.__append_data__({h : 'N/A' for h in self.header})
+            self.program.run_index += 1
+         #   self.__append_data__({h : 'N/A' for h in self.header})
+
+    @property
+    def header(self):
+        return self.program.header
 
     @property
     def data(self):
@@ -169,9 +186,8 @@ class OnlyOneWrapper(ComposeWrapper):
         assert value in (True, False)
         for prog in self.programs:
             prog.enabled = False
-        if value:
-            self.current_prog = random.choice(self.programs)
-            self.current_prog.enabled = True
+        self.current_prog = random.choice(self.programs)
+        self.current_prog.enabled = True
 
 class PurePythonProgram(Program):
     def __command_line__(self):

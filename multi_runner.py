@@ -41,7 +41,8 @@ if __name__ == '__main__':
                 Intercoolr(),
             ])
     else:
-        wrappers.append(get_likwid_instance(group=args.likwid, nb_threads=args.nb_threads))
+        wrappers.append(OnlyOneWrapper(LikwidEnergy(args.nb_threads), LikwidClock(args.nb_threads)))
+        #wrappers.append(get_likwid_instance(group=args.likwid, nb_threads=args.nb_threads))
     if args.remove_os_noise and args.likwid is None:
         wrappers.append(RemoveOperatingSystemNoise(args.nb_threads))
     exp = ExpEngine(application=Dgemm(lib=args.lib, size=args.size, nb_calls=args.nb_calls, nb_threads=args.nb_threads, block_size=args.block_size, likwid=args.likwid), wrappers=wrappers)
