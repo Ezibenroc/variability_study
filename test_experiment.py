@@ -51,10 +51,10 @@ class ProgramTest(unittest.TestCase):
         mock.fetch_data()
         mock.fetch_data()
         data_dict = {'x': [1, 2], 'y': ['a', 'b'], 'run_index': [0, 1]}
-        other = pandas.DataFrame(data_dict)
+        other = pandas.DataFrame(data_dict).set_index('run_index')
         data_dict['foo'] = [mock.idn, mock.idn]
         data_dict['bar'] = [mock.idn, mock.idn]
-        expected = pandas.DataFrame(data_dict)
+        expected = pandas.DataFrame(data_dict).set_index('run_index')
         result = mock.merge_data(other)
         assertFrameEqual(result, expected)
 
@@ -65,7 +65,7 @@ class ProgramTest(unittest.TestCase):
         for _ in range(max_ind):
             mock.fetch_data()
         data_dict = {'x': [1, 2], 'y': ['a', 'b'], 'run_index': [0, 3]}
-        other = pandas.DataFrame(data_dict)
+        other = pandas.DataFrame(data_dict).set_index('run_index')
         data_dict['foo'] = [mock.idn, mock.idn]
         data_dict['bar'] = [mock.idn, mock.idn]
         nan = float('NaN')
@@ -75,9 +75,27 @@ class ProgramTest(unittest.TestCase):
             'foo': [mock.idn]*max_ind,
             'bar': [mock.idn]*max_ind,
             'run_index': list(range(max_ind))
-        })
+        }).set_index('run_index')
         result = mock.merge_data(other)
         assertFrameEqual(result, expected)
+
+    def test_merge_missing_data_samekeys(self):
+        df1 = pandas.DataFrame({
+                'x': list(range(1, 10, 2)),
+                'y': list(range(2, 20, 4)),
+            })
+        df2 = pandas.DataFrame({
+                'x': list(range(0, 10, 2)),
+                'y': list(range(0, 20, 4)),
+            })
+        expected = pandas.DataFrame({
+                'x': list(range(0, 10)),
+                'y': list(range(0, 20, 2)),
+            })
+        df1 = df1.set_index('x')
+        df2 = df2.set_index('x')
+        real = MockProgram.__merge_data__(df1, df2).reset_index()
+        assertFrameEqual(expected, real)
 
 class ComposeWrapperTest(unittest.TestCase):
     def setUp(self):
@@ -100,6 +118,7 @@ class ComposeWrapperTest(unittest.TestCase):
         expected = pandas.DataFrame()
         for prog in self.programs:
             expected = prog.merge_data(expected)
+        expected = expected.reset_index()
         assertFrameEqual(self.wrapper.data, expected)
 
 class DisableWrapperTest(unittest.TestCase):
@@ -158,9 +177,12 @@ class OnlyOneWrapperTest(unittest.TestCase):
             self.wrapper.enabled = True
             prog = self.get_enabled_program()
             enabled[prog.idn] += 1
+            self.wrapper.fetch_data()
         for val in enabled.values():
-            self.assertGreater(val, nb_iter/len(self.programs)*0.8)
-            self.assertLess(val, nb_iter/len(self.programs)*1.2)
+            self.assertGreater(val, nb_iter/len(self.programs)*0.7)
+            self.assertLess(val, nb_iter/len(self.programs)*1.3)
+        data = self.wrapper.data.reset_index()
+        self.assertEqual(set(data['run_index']), set(range(nb_iter)))
 
 
 if __name__ == "__main__":

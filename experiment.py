@@ -73,18 +73,30 @@ class Program(metaclass=abc.ABCMeta):
             self.__data__ = pandas.DataFrame({h:[v] for h, v in data.items()})
 
     @staticmethod
-    def __merge_data__(df1, df2, key):
-        return df1.join(df2.set_index(key), on=key)
+    def __merge_data__(df1, df2):
+        try:
+            return df1.join(df2, how='outer')
+        except ValueError: # overlap of columns
+            result = df1.combine_first(df2)
+            if len(df1) + len(df2) != len(result):
+                raise ValueError('The two dataframes have overlapping columns and share common values in their index.')
+            dtypes = df1.dtypes.combine_first(df2.dtypes)
+            for k, v in dtypes.iteritems():
+                try:
+                    result[k] = result[k].astype(v)
+                except valueError:
+                    pass # When there is missing data, it is represented as NaN, which is a float, even if the original data was int
+            return result
 
     def merge_data(self, other_data):
-        for i in range(len(self.key), 0, -1):
-            key = self.key[0:i]
-            try:
-                return self.__merge_data__(self.data, other_data, key)
-            except KeyError: # the last part of this key (e.g. call_index) is not present yet in the aggregate, let's just add it
-                continue
-        # Merging without key
-        return self.data.join(other_data)
+        try:
+            df = self.data.set_index(self.key)
+        except KeyError:
+            if len(self.data) == 0:
+                return pandas.DataFrame()
+            else:
+                raise ValueError('%s: Could not set index on key %s.' % (self.__class__.__name__, self.key))
+        return self.__merge_data__(df, other_data)
 
     def post_process(self):
         pass
@@ -125,16 +137,19 @@ class ComposeWrapper(Program):
         return header
 
     @property
+    def key(self):
+        key = set()
+        for prog in self.programs:
+            key |= set(prog.key)
+        return list(key)
+
+    @property
     def data(self):
         all_data = pandas.DataFrame()
         for prog in self.programs:
             prog.post_process()
             all_data = prog.merge_data(all_data)
-        return all_data
-
-    @data.setter
-    def data(self, df):
-        pass # a workaroud, necessary to implemnet the getter...
+        return all_data.reset_index()
 
 class DisableWrapper(Program):
     def __init__(self, program):
@@ -163,6 +178,10 @@ class DisableWrapper(Program):
     @property
     def header(self):
         return self.program.header
+
+    @property
+    def key(self):
+        return self.program.key
 
     @property
     def data(self):
@@ -560,6 +579,7 @@ class ExpEngine:
         for prog in self.programs:
             prog.post_process()
             all_data = prog.merge_data(all_data)
+            all_data.reset_index()
         with open(csv_filename, 'w') as f:
             f.write(all_data.to_csv())
         if compress:
