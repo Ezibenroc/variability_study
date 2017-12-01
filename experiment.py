@@ -435,16 +435,15 @@ class Likwid(Program):
                     in_events = True
         raise LikwidError('Wrong CSV format, could not identify events.')
 
-    def __init_data__(self):
+    def __init_header__(self):
         try:
             self.events
         except AttributeError:
             self.get_available_events()
             self.header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index'] + self.events
-            self.data = pandas.DataFrame(columns=self.header + ['run_index'])
 
     def __fetch_data__(self):
-        self.__init_data__()
+        self.__init_header__()
         clock = self.get_cpu_clock()
         with open(self.tmp_filename) as f:
             reader = csv.reader(f)
