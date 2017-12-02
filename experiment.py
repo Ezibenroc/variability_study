@@ -81,8 +81,30 @@ class Program(metaclass=abc.ABCMeta):
             return df1
         if len(df1) == 0:
             return df2
+        # See https://github.com/pandas-dev/pandas/blob/d270bbb1448ecaccbb567721c991350bac715059/pandas/core/indexes/base.py#L3230-L3232
+        # Cannot do a join on the indexes when using different multi-level indexes.
+        # Typical example: joining Likwid's dataframe (which has ['run_index', 'call_index', 'thread_index'] as index)
+        # with Dgemm's dataframe (which has ['run_index', 'call_index'].
+        # To reproduce:
+        # > a = pandas.DataFrame({'x': [1], 'y':['a'], 'z':[10], 'zz': [30]}).set_index(['x', 'y', 'z'])
+        # > b = pandas.DataFrame({'x': [1], 'y':['a'], 'foo':[42]}).set_index(['x', 'y'])
+        # > a.join(b) # raises NotImplementedError
+        # So instead, let's make sure everyone has the same index...
+        if df2.index.nlevels > df1.index.nlevels:
+            df1, df2 = df2, df1
+        if df1.index.nlevels > df2.index.nlevels:
+            index_1 = df1.index.names
+            index_2 = df2.index.names
+            if not set(index_1) > set(index_2):
+                raise ValueError('Indexes do not match, got %s and %s.' % (index_1, index_2))
+            missing = set(index_1) - set(index_2)
+            df2 = df2.reset_index()
+            for idx in missing:
+                df2[idx] = 0 # warning: will not work if 0 is not a value for df1[idx] (but this is not the case currently)
+            df2 = df2.set_index(index_1) # we have added the missing columns, so now we can reindex on the larger index
+            return df1.join(df2, how='outer')
         try:
-            r= df1.join(df2, how='outer')
+            return df1.join(df2, how='outer')
         except ValueError: # overlap of columns
             result = df1.combine_first(df2)
             if len(df1) + len(df2) != len(result):
@@ -189,7 +211,6 @@ class DisableWrapper(Program):
             self.program.fetch_data()
         else:
             self.program.run_index += 1
-         #   self.__append_data__({h : 'N/A' for h in self.header})
 
     @property
     def header(self):
@@ -600,7 +621,7 @@ class ExpEngine:
         for prog in self.programs:
             prog.post_process()
             all_data = prog.merge_data(all_data)
-            all_data.reset_index()
+        all_data = all_data.reset_index()
         with open(csv_filename, 'w') as f:
             f.write(all_data.to_csv())
         if compress:
