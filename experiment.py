@@ -471,7 +471,7 @@ class Likwid(Program):
         else:
             self.cpubind = str(random.randint(0, self.nb_cores-1))
         return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
-                'likwid-perfctr', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m'
+                'likwid-perfctr', '-f', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m'
                 ]
     def get_cpu_clock(self):
         with open(self.tmp_output, 'r') as f:
