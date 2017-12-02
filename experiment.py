@@ -515,7 +515,7 @@ class Likwid(Program):
             reader = csv.reader(f)
             for row in reader:
                 assert len(row) == len(self.header)-1
-                entry = {'cpu_clock': clock}
+                entry = {'likwid_group': self.group, 'cpu_clock': clock}
                 for i in range(1, len(self.header)): # start from 1 because 0 is the cpu_clock
                     h = self.header[i]
                     entry[h] = float(row[i-1])
