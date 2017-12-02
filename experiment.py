@@ -435,6 +435,7 @@ class LikwidError(Exception):
 class Likwid(Program):
     key = ['run_index', 'call_index', 'thread_index']
     header = []
+    available_groups = None
     def __init__(self, group, nb_threads):
         super().__init__()
         self.group = group
@@ -445,12 +446,18 @@ class Likwid(Program):
         self.tmp_output = os.path.join(self.tmp_dir.name, 'output.csv')
         self.check_group()
 
+    @classmethod
+    def get_available_groups(cls):
+        if cls.available_groups is None:
+            stdout, stderr = run_command(['likwid-perfctr', '-a'])
+            stdout = stdout.decode('ascii')
+            lines = stdout.split('\n')[2:]
+            lines = [line.strip().split() for line in lines]
+            cls.available_groups = set([line[0] for line in lines if len(line) > 0])
+        return cls.available_groups
+
     def check_group(self):
-        stdout, stderr = run_command(['likwid-perfctr', '-a'])
-        stdout = stdout.decode('ascii')
-        lines = stdout.split('\n')[2:]
-        lines = [line.strip().split() for line in lines]
-        groups = [line[0] for line in lines if len(line) > 0]
+        groups = self.get_available_groups()
         if self.group not in groups:
             raise LikwidError('Group %s not available on this machine.\nAvailable groups: %s.' % (self.group, groups))
 
@@ -526,25 +533,12 @@ class Likwid(Program):
         # https://github.com/RRZE-HPC/likwid/blob/b8669dba1c5d8bf61cb0d4d4ff2c6fee31bf99ce/groups/ivybridgeEP/UNCORECLOCK.txt#L45
         self.data['likwid_frequency'] = self.data['CPU_CLK_UNHALTED_CORE']/self.data['CPU_CLK_UNHALTED_REF']*self.data['cpu_clock']
 
-class LikwidClock(Likwid):
-    def __init__(self, nb_threads):
-        super().__init__('CLOCK', nb_threads)
-
-class LikwidEnergy(Likwid):
-    def __init__(self, nb_threads):
-        super().__init__('ENERGY', nb_threads)
-
-
-def get_likwid_instance(group, nb_threads):
-    likwid_cls = {
-        'clock': LikwidClock,
-        'energy': LikwidEnergy,
-    }
-    try:
-        return likwid_cls[group](nb_threads)
-    except KeyError:
-        raise ValueError('This Likwid event group is not supported: %s.\nSupported values: %s.' % (group, list(likwid_cls.keys())))
-
+def get_likwid_instance(nb_threads, groups):
+    assert len(groups) > 0
+    if len(groups) == 1:
+        return Likwid(group=groups[0], nb_threads=nb_threads)
+    else:
+        return OnlyOneWrapper(*[Likwid(group=group, nb_threads=nb_threads) for group in groups])
 
 class Dgemm(Program):
     header = ['call_index', 'size', 'nb_calls', 'time']
