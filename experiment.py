@@ -29,6 +29,9 @@ class Program(metaclass=abc.ABCMeta):
         self.run_index = 0
         self.enabled = True
 
+    def __str__(self):
+        return self.__class__.__name__
+
     @property
     def enabled(self):
         return self.__enabled__
@@ -74,8 +77,12 @@ class Program(metaclass=abc.ABCMeta):
 
     @staticmethod
     def __merge_data__(df1, df2):
+        if len(df2) == 0:
+            return df1
+        if len(df1) == 0:
+            return df2
         try:
-            return df1.join(df2, how='outer')
+            r= df1.join(df2, how='outer')
         except ValueError: # overlap of columns
             result = df1.combine_first(df2)
             if len(df1) + len(df2) != len(result):
@@ -93,7 +100,7 @@ class Program(metaclass=abc.ABCMeta):
             df = self.data.set_index(self.key)
         except KeyError:
             if len(self.data) == 0:
-                return pandas.DataFrame()
+                return other_data
             else:
                 raise ValueError('%s: Could not set index on key %s.' % (self.__class__.__name__, self.key))
         return self.__merge_data__(df, other_data)
@@ -112,6 +119,9 @@ class ComposeWrapper(Program):
     def __init__(self, *programs):
         self.programs = programs
         super().__init__()
+
+    def __str__(self):
+        return '%s(%s)' % (self.__class__.__name__, ', '.join([str(prog) for prog in self.programs]))
 
     def __command_line__(self):
         cmd = []
@@ -147,14 +157,20 @@ class ComposeWrapper(Program):
     def data(self):
         all_data = pandas.DataFrame()
         for prog in self.programs:
-            prog.post_process()
             all_data = prog.merge_data(all_data)
         return all_data.reset_index()
+
+    def post_process(self):
+        for prog in self.programs:
+            prog.post_process()
 
 class DisableWrapper(Program):
     def __init__(self, program):
         self.program = program
         super().__init__()
+
+    def __str__(self):
+        return '%s(%s)' % (self.__class__.__name__, str(self.program))
 
     def __command_line__(self):
         if self.enabled:
@@ -190,6 +206,9 @@ class DisableWrapper(Program):
     @data.setter
     def data(self, df):
         pass # a workaroud, necessary to implemnet the getter...
+
+    def post_process(self):
+        self.program.post_process()
 
 class OnlyOneWrapper(ComposeWrapper):
     def __init__(self, *programs):
@@ -393,7 +412,7 @@ class LikwidError(Exception):
     pass
 
 class Likwid(Program):
-    keys = ['run_index', 'call_index', 'thread_index']
+    key = ['run_index', 'call_index', 'thread_index']
     header = []
     def __init__(self, group, nb_threads):
         super().__init__()
@@ -475,11 +494,13 @@ class Likwid(Program):
                 self.__append_data__(entry)
 
     def __decumulate__(self):
-        df = self.data.set_index(['run_index', 'call_index', 'thread_index'])[['likwid_time']]
+        df = self.data.set_index(self.key)[['likwid_time']]
         df = df.groupby(level=['run_index', 'thread_index']).diff().fillna(df).reset_index()
         self.data.update(df)
 
     def post_process(self):
+        if len(self.data) == 0: # can happen when used with a DisableWrapper
+            return
         self.__decumulate__()
         # https://github.com/RRZE-HPC/likwid/blob/b8669dba1c5d8bf61cb0d4d4ff2c6fee31bf99ce/groups/ivybridgeEP/UNCORECLOCK.txt#L45
         self.data['likwid_frequency'] = self.data['CPU_CLK_UNHALTED_CORE']/self.data['CPU_CLK_UNHALTED_REF']*self.data['cpu_clock']
@@ -525,7 +546,7 @@ class Dgemm(Program):
 
     def __fetch_data__(self):
         with open(self.tmp_filename, 'r') as f:
-            times = f.readlines()
+            times = [float(t) for t in f.readlines()]
         for call_index, t in enumerate(times):
             self.__append_data__({'call_index': call_index, 'size': self.size, 'nb_calls': self.nb_calls, 'time': t})
 

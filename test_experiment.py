@@ -112,6 +112,9 @@ class ComposeWrapperTest(unittest.TestCase):
             expected.update(prog.environment_variables)
         self.assertEqual(self.wrapper.environment_variables, expected)
 
+    def test_key(self):
+        self.assertEqual(self.wrapper.key, self.programs[0].key) # they all have the same key here
+
     def test_data(self):
         for _ in range(10):
             self.wrapper.fetch_data()
@@ -143,6 +146,9 @@ class DisableWrapperTest(unittest.TestCase):
             else:
                 expected = {}
         self.assertEqual(self.wrapper.environment_variables, expected)
+
+    def test_key(self):
+        self.assertEqual(self.wrapper.key, self.program.key)
 
     def test_data(self):
         enabled_list = []
