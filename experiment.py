@@ -143,6 +143,12 @@ class Program(metaclass=abc.ABCMeta):
         except AttributeError:
             return pandas.DataFrame()
 
+    def setup(self):
+        pass
+
+    def teardown(self):
+        pass
+
 class ComposeWrapper(Program):
     def __init__(self, *programs):
         self.programs = programs
@@ -632,18 +638,34 @@ class ExpEngine:
         os.environ.update(self.environment_variables)
         self.output = run_command(self.command_line)
 
-    def run_all(self, csv_filename, nb_runs, compress=False):
-        with open(csv_filename, 'w') as f:
-            for run_index in range(nb_runs):
-                self.randomly_enable()
-                self.run()
-                for prog in self.programs:
-                    prog.fetch_data()
+    def setup(self):
+        for prog in self.programs:
+            prog.setup()
+
+    def teardown(self):
+        for prog in self.programs:
+            prog.teardown()
+
+    def fetch_data(self):
+        for prog in self.programs:
+            prog.fetch_data()
+
+    def gather_data(self):
         all_data = pandas.DataFrame()
         for prog in self.programs:
             prog.post_process()
             all_data = prog.merge_data(all_data)
         all_data = all_data.reset_index()
+        return all_data
+
+    def run_all(self, csv_filename, nb_runs, compress=False):
+        for run_index in range(nb_runs):
+            self.randomly_enable()
+            self.setup()
+            self.run()
+            self.teardown()
+            self.fetch_data()
+        all_data =self.gather_data()
         with open(csv_filename, 'w') as f:
             f.write(all_data.to_csv())
         if compress:
