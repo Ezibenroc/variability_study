@@ -501,11 +501,20 @@ class Likwid(Program):
                     in_events = True
         raise LikwidError('Wrong CSV format, could not identify events.')
 
+    def disambiguate_multiple_events(self):
+        nb_occurences = collections.Counter(self.events)
+        counter = collections.Counter()
+        for i, evt in enumerate(self.events):
+            if nb_occurences[evt] > 1:
+                self.events[i] = '%s_%d' % (evt, counter[evt])
+                counter[evt] += 1
+
     def __init_header__(self):
         try:
             self.events
         except AttributeError:
             self.get_available_events()
+            self.disambiguate_multiple_events()
             self.header = ['cpu_clock', 'call_index', 'likwid_time', 'thread_index', 'core_index'] + self.events
 
     def __fetch_data__(self):
