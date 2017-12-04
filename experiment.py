@@ -404,7 +404,17 @@ class Perf(Program):
         assert len(metrics_to_handle) == 0
         self.__append_data__(data)
 
-class RemoveOperatingSystemNoise(Program):#Disableable):
+class Scheduler(Program):
+    def __environment_variables__(self):
+        return {}
+
+    def __command_line__(self):
+        return ['chrt', '--fifo', '99']
+
+    def __fetch_data__(self):
+        pass
+
+class ThreadMapping(Program):
     header = ['cpubind']
     def __init__(self, nb_threads):
         super().__init__()
@@ -421,11 +431,8 @@ class RemoveOperatingSystemNoise(Program):#Disableable):
             self.cpubind = 'all'
         else:
             self.cpubind = str(random.randint(0, self.nb_cores-1))
-        return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
-                'numactl', '--physcpubind=%s' % self.cpubind, '--localalloc',   # we have to choose between localalloc and membind, let's pick localalloc
-                # also cannot use --touch option here, not sure to understand why
-                ]
-
+        return ['numactl', '--physcpubind=%s' % self.cpubind, '--localalloc']   # we have to choose between localalloc and membind, let's pick localalloc
+                                                                                # also cannot use --touch option here, not sure to understand why
     def __fetch_data__(self):
         self.__append_data__({'cpubind': self.cpubind})
 
@@ -470,9 +477,8 @@ class Likwid(Program):
             self.cpubind = '%d-%d' % (0, self.nb_cores-1)
         else:
             self.cpubind = str(random.randint(0, self.nb_cores-1))
-        return ['chrt', '--fifo', '99',                                         # TODO move chrt in a separate class
-                'likwid-perfctr', '-f', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m'
-                ]
+        return ['likwid-perfctr', '-f', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m']
+
     def get_cpu_clock(self):
         with open(self.tmp_output, 'r') as f:
             reader = csv.reader(f)
