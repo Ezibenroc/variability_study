@@ -27,7 +27,7 @@ class Program(metaclass=abc.ABCMeta):
         self.tmp_dir = tempfile.TemporaryDirectory()
         self.tmp_filename = os.path.join(self.tmp_dir.name, 'file')
         self.run_index = 0
-        self.enabled = True
+        self.__enabled__ = True
 
     def __str__(self):
         return self.__class__.__name__
@@ -39,7 +39,6 @@ class Program(metaclass=abc.ABCMeta):
     @enabled.setter
     def enabled(self, value):
         assert value in (True, False)
-        self.__enabled__ = value
 
     def __del__(self):
         self.tmp_dir.cleanup()
@@ -60,6 +59,10 @@ class Program(metaclass=abc.ABCMeta):
     def __environment_variables__(self):
         pass
 
+    @property
+    def name(self):
+        return self.__class__.__name__
+
     def fetch_data(self):
         self.__fetch_data__()
         self.run_index += 1
@@ -70,10 +73,13 @@ class Program(metaclass=abc.ABCMeta):
 
     def __append_data__(self, data):
         data['run_index'] = self.run_index
+        data[self.name] = self.enabled
         try:
             self.__data__.loc[len(self.__data__)] = data
-        except AttributeError:
+        except AttributeError:  # __data__ not initialized yet
             self.__data__ = pandas.DataFrame({h:[v] for h, v in data.items()})
+        except ValueError:      # data is incomplete (e.g. because of DisableWrapper), cannot append in place
+            self.__data__ = self.__data__.append(data, ignore_index=True)
 
     @staticmethod
     def __merge_data__(df1, df2):
@@ -210,6 +216,7 @@ class DisableWrapper(Program):
         if self.enabled:
             self.program.fetch_data()
         else:
+            self.program.__append_data__({})
             self.program.run_index += 1
 
     @property
@@ -230,6 +237,15 @@ class DisableWrapper(Program):
 
     def post_process(self):
         self.program.post_process()
+
+    @property
+    def enabled(self):
+        return self.program.enabled
+
+    @enabled.setter
+    def enabled(self, value):
+        assert value in (True, False)
+        self.program.__enabled__ = value
 
 class OnlyOneWrapper(ComposeWrapper):
     def __init__(self, *programs):
@@ -257,7 +273,7 @@ class PurePythonProgram(Program):
 
 class NoDataProgram(Program):
     def __fetch_data__(self):
-        pass
+        self.__append_data__({})
 
 class Time(Program):
     header = ['user_time', 'system_time']
@@ -355,7 +371,7 @@ class Temperature(PurePythonProgram):
     def __fetch_data__(self):
         temperatures = [temp.current for temp in psutil.sensors_temperatures()['coretemp'] if temp.label.startswith('Core')]
         assert len(temperatures) == cpu_count() or len(temperatures) == cpu_count()/2 # case of hyperthreading
-        return self.__append_data__({'average_temperature': mean(temperatures)})
+        self.__append_data__({'average_temperature': mean(temperatures)})
 
 class Perf(Program):
     metrics = ['context-switches',
@@ -404,15 +420,12 @@ class Perf(Program):
         assert len(metrics_to_handle) == 0
         self.__append_data__(data)
 
-class Scheduler(Program):
+class Scheduler(NoDataProgram):
     def __environment_variables__(self):
         return {}
 
     def __command_line__(self):
         return ['chrt', '--fifo', '99']
-
-    def __fetch_data__(self):
-        pass
 
 class ThreadMapping(Program):
     header = ['cpubind']
