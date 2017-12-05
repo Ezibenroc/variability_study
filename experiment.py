@@ -735,8 +735,7 @@ class ExpEngine:
         for prog in self.programs:
             prog.post_process()
             all_data = prog.merge_data(all_data)
-        index = ['run_index', 'call_index', 'thread_index']
-        all_data = all_data.reset_index().sort_values(by=index).fillna(method='ffill')
+        all_data = all_data.reset_index().sort_values(by=['run_index', 'call_index']).fillna(method='ffill')
         return all_data
 
     def run_all(self, csv_filename, nb_runs, compress=False):

@@ -29,7 +29,7 @@ for host in $*; do {
     run_command ${host} 'wget https://bootstrap.pypa.io/get-pip.py && python3 get-pip.py && pip3 install psutil py-cpuinfo GitPython pandas'
     run_command ${host} 'cd variability_study/intercoolr && make'
     run_command ${host} 'cd variability_study && python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1 --stat'
-    run_command ${host} 'cd variability_study && python3 ./multi_runner.py --nb_runs 3 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --remove_os_noise'
+    run_command ${host} 'cd variability_study && python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --cpu_power=random --scheduler=random --thread_mapping=random'
     run_command ${host} 'modprobe msr'
     run_command ${host} 'cd variability_study && python3 ./multi_runner.py --nb_runs 3 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --likwid CLOCK L3CACHE'
     run_command ${host} 'likwid-perfctr -a'
