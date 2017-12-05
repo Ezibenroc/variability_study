@@ -590,6 +590,62 @@ def get_likwid_instance(nb_threads, groups):
     else:
         return OnlyOneWrapper(*[Likwid(group=group, nb_threads=nb_threads) for group in groups])
 
+class CPUPowerError(Exception):
+    pass
+
+class CPUPower(NoDataProgram):
+    def __init__(self):
+        super().__init__()
+        governors = run_command(['cpufreq-info', '-g'])
+        governors = governors[0].decode('ascii').split()
+        self.max_governor = 'performance'
+        self.default_governor = 'powersave'
+        if self.max_governor not in governors:
+            raise CPUPowerError('Governor %s is not available on this machine.\nAvailable governors: %s.' % (self.max_governor, governors))
+        if self.default_governor not in governors:
+            raise CPUPowerError('Governor %s is not available on this machine.\nAvailable governors: %s.' % (self.default_governor, governors))
+        self.min_freq = self.read_int_in_file('/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_min_freq')
+        self.max_freq = self.read_int_in_file('/sys/devices/system/cpu/cpu0/cpufreq/cpuinfo_max_freq')
+
+    def read_int_in_file(self, filename):
+        with open(filename) as f:
+            content = f.readlines()
+        try:
+            assert len(content) == 1
+            return int(content[0])
+        except (ValueError, AssertionError):
+            raise CPUPowerError('Wrong format for file %s.' % filename)
+
+    def write_int_in_file(self, filename, value):
+        with open(filename, 'w') as f:
+            f.write('%d\n', value)
+
+    def __command_line__(self):
+        return []
+
+    def __environment_variables__(self):
+        return {}
+
+    @staticmethod
+    def __run_cpupower__(*args):
+        run_command(['cpupower', '-c', 'all', 'frequency-set', *args])
+
+    @classmethod
+    def __set_governor__(cls, governor):
+        cls.__run_cpupower__('-g', governor)
+
+    @classmethod
+    def __set_frequencies__(cls, min_freq, max_freq):
+        cls.__run_cpupower__('-d', str(min_freq), '-u', str(max_freq))
+
+    def setup(self):
+        self.__set_governor__(self.max_governor)
+        self.__set_frequencies__(self.max_freq, self.max_freq)
+
+    def teardown(self):
+        self.__set_governor__(self.default_governor)
+        self.__set_frequencies__(self.min_freq, self.max_freq)
+
 class Dgemm(Program):
     header = ['call_index', 'size', 'nb_calls', 'time']
     key = ['run_index', 'call_index']

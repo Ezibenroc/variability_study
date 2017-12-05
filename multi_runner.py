@@ -30,6 +30,8 @@ if __name__ == '__main__':
             default='no', help='Map each thread to a specific core.')
     parser.add_argument('--scheduler', type=str, choices=['yes', 'no', 'random'],
             default='no', help='Use a FIFO scheduling policy.')
+    parser.add_argument('--cpu_power', type=str, choices=['yes', 'no', 'random'],
+            default='no', help='Force a high frequency for the CPU.')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--csv_file', type = str,
             required=True, help='Path of the CSV file for the results.')
@@ -55,6 +57,7 @@ if __name__ == '__main__':
     if args.likwid is None:
         add_wrapper(ThreadMapping, args.thread_mapping, wrappers, args.nb_threads)
     add_wrapper(Scheduler, args.scheduler, wrappers)
+    add_wrapper(CPUPower, args.cpu_power, wrappers)
 
     exp = ExpEngine(application=Dgemm(lib=args.lib, size=args.size, nb_calls=args.nb_calls, nb_threads=args.nb_threads, block_size=args.block_size, likwid=args.likwid), wrappers=wrappers)
     exp.run_all(nb_runs=args.nb_runs, csv_filename=args.csv_file, compress=True)

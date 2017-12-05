@@ -22,7 +22,7 @@ for host in $*; do {
     scp -q openblas.zip root@${host}:/root
     scp -q variability_study.zip  root@${host}:/root
     run_command ${host} 'yes | apt upgrade'
-    run_command ${host} 'yes | apt install build-essential python python3 python3-dev zip linux-cpupower make linux-tools git numactl likwid time'
+    run_command ${host} 'yes | apt install build-essential python python3 python3-dev zip linux-cpupower make linux-tools git numactl likwid time cpufrequtils'
     run_command ${host} 'unzip openblas.zip'
     run_command ${host} 'cd OpenBLAS* && make -j 8 && make install PREFIX=/usr && mkdir /usr/lib/openblas-base/ && ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so'
     run_command ${host} 'unzip variability_study.zip'
