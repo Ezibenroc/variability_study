@@ -110,7 +110,7 @@ class ProgramTest(unittest.TestCase):
             })
         df1 = df1.set_index('x')
         df2 = df2.set_index('x')
-        real = MockProgram.__merge_data__(df1, df2).reset_index()
+        real = MockProgram.__combine_data__(df1, df2).reset_index()
         assertFrameEqual(expected, real)
 
 class ComposeWrapperTest(unittest.TestCase):

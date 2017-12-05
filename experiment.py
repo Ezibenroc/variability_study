@@ -108,30 +108,32 @@ class Program(metaclass=abc.ABCMeta):
             for idx in missing:
                 df2[idx] = 0 # warning: will not work if 0 is not a value for df1[idx] (but this is not the case currently)
             df2 = df2.set_index(index_1) # we have added the missing columns, so now we can reindex on the larger index
-            return df1.join(df2, how='outer')
-        try:
-            return df1.join(df2, how='outer')
-        except ValueError: # overlap of columns
-            result = df1.combine_first(df2)
-            if len(df1) + len(df2) != len(result):
-                raise ValueError('The two dataframes have overlapping columns and share common values in their index.')
-            dtypes = df1.dtypes.combine_first(df2.dtypes)
-            for k, v in dtypes.iteritems():
-                try:
-                    result[k] = result[k].astype(v)
-                except valueError:
-                    pass # When there is missing data, it is represented as NaN, which is a float, even if the original data was int
-            return result
+        return df1.join(df2, how='outer')
+
+    @staticmethod
+    def __combine_data__(df1, df2):
+        result = df1.combine_first(df2)
+        if len(df1) + len(df2) != len(result):
+            raise ValueError('The two dataframes have overlapping columns and share common values in their index.')
+        dtypes = df1.dtypes.combine_first(df2.dtypes)
+        for k, v in dtypes.iteritems():
+            try:
+                result[k] = result[k].astype(v)
+            except valueError:
+                pass # When there is missing data, it is represented as NaN, which is a float, even if the original data was int
+        return result
 
     def merge_data(self, other_data):
         try:
             df = self.data.set_index(self.key)
-        except KeyError:
-            if len(self.data) == 0:
-                return other_data
-            else:
-                raise ValueError('%s: Could not set index on key %s.' % (self.__class__.__name__, self.key))
-        return self.__merge_data__(df, other_data)
+        except KeyError: # Should only happen when used within a DisableWrapper and we have been disabled every run
+            assert len(self.data) == 0 or not self.data[self.name].any()
+            return other_data
+        try:
+            return self.__merge_data__(df.fillna(value=-1), other_data)
+        except ValueError: # Overlapping columns, like for Likwid
+            return self.__combine_data__(df, other_data) # no fillna here
+
 
     def post_process(self):
         pass
@@ -232,6 +234,10 @@ class DisableWrapper(Program):
         else:
             self.program.__append_data__({})
             self.program.run_index += 1
+
+    @property
+    def name(self):
+        return self.program.name
 
     @property
     def header(self):
@@ -577,7 +583,9 @@ class Likwid(Program):
         self.data.update(df)
 
     def post_process(self):
-        if len(self.data) == 0: # can happen when used with a DisableWrapper
+        try:
+            self.data[self.key]
+        except KeyError: # can happen when used with a DisableWrapper
             return
         self.__decumulate__()
         # https://github.com/RRZE-HPC/likwid/blob/b8669dba1c5d8bf61cb0d4d4ff2c6fee31bf99ce/groups/ivybridgeEP/UNCORECLOCK.txt#L45
@@ -727,7 +735,8 @@ class ExpEngine:
         for prog in self.programs:
             prog.post_process()
             all_data = prog.merge_data(all_data)
-        all_data = all_data.reset_index()
+        index = ['run_index', 'call_index', 'thread_index']
+        all_data = all_data.reset_index().sort_values(by=index).fillna(method='ffill')
         return all_data
 
     def run_all(self, csv_filename, nb_runs, compress=False):
