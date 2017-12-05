@@ -17,6 +17,7 @@ class MockProgram(Program):
         super().__init__()
         self.idn = idn
         self.suffix_header = suffix_header
+        self.events = []
         if suffix_header: # to have unique header in some test cases
             self.header = ['%s%d' % (h, idn) for h in self.header]
 
@@ -35,6 +36,12 @@ class MockProgram(Program):
 
     def __fetch_data__(self):
         self.__append_data__({h: self.idn for h in self.header})
+
+    def setup(self):
+        self.events.append('setup')
+
+    def teardown(self):
+        self.events.append('teardown')
 
 class ProgramTest(unittest.TestCase):
     def test_basic(self):
@@ -133,6 +140,16 @@ class ComposeWrapperTest(unittest.TestCase):
         expected = expected.reset_index()
         assertFrameEqual(self.wrapper.data, expected)
 
+    def test_setup_teardown(self):
+        functions = [self.wrapper.setup, self.wrapper.teardown]
+        expected_events = []
+        for _ in range(10):
+            f = random.choice(functions)
+            f()
+            expected_events.append(f.__name__)
+            for prog in self.programs:
+                self.assertEqual(prog.events, expected_events)
+
 class DisableWrapperTest(unittest.TestCase):
     def setUp(self):
         self.program = MockProgram(random.randint(1, 1000))
@@ -178,6 +195,17 @@ class DisableWrapperTest(unittest.TestCase):
                 self.program.name: enabled_list,
             })
         assertFrameEqual(self.wrapper.data, expected)
+
+    def test_setup_teardown(self):
+        functions = [self.wrapper.setup, self.wrapper.teardown]
+        expected_events = []
+        for _ in range(10):
+            f = random.choice(functions)
+            self.wrapper.enabled = enabled = random.choice([True, False])
+            f()
+            if enabled:
+                expected_events.append(f.__name__)
+            self.assertEqual(self.program.events, expected_events)
 
 class OnlyOneWrapperTest(unittest.TestCase):
     def setUp(self):

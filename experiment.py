@@ -198,6 +198,14 @@ class ComposeWrapper(Program):
         for prog in self.programs:
             prog.post_process()
 
+    def setup(self):
+        for prog in self.programs:
+            prog.setup()
+
+    def teardown(self):
+        for prog in self.programs:
+            prog.teardown()
+
 class DisableWrapper(Program):
     def __init__(self, program):
         self.program = program
@@ -252,6 +260,14 @@ class DisableWrapper(Program):
     def enabled(self, value):
         assert value in (True, False)
         self.program.__enabled__ = value
+
+    def setup(self):
+        if self.enabled:
+            self.program.setup()
+
+    def teardown(self):
+        if self.enabled:
+            self.program.teardown()
 
 class OnlyOneWrapper(ComposeWrapper):
     def __init__(self, *programs):
