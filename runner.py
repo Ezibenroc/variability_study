@@ -105,21 +105,23 @@ def run_dtrsm(sizes, dimensions, get_stat, wrapper):
     return float(result), stat
 
 def get_sizes(nb, size_range, big_size_range, hpl):
-    if hpl:
-        assert size_range == big_size_range
-        size = random.randint(size_range.min, size_range.max)
-        sizes = [size]*nb
-        if nb == 3: # dgemm
-            sizes[2] = CONSTANT_VALUE
-        else: # dtrsm
-            assert nb == 2
-            sizes[0] = CONSTANT_VALUE
-        return tuple(sizes)
-    else:
-        sizes = [random.randint(size_range.min, size_range.max) for _ in range(nb)]
-        i = random.choice([0, 1])
-        sizes[i] = random.randint(big_size_range.min, big_size_range.max)
-        return tuple(sizes)
+    size = random.randint(size_range.min, size_range.max)
+    return (size,)*nb
+#    if hpl:
+#        assert size_range == big_size_range
+#        size = random.randint(size_range.min, size_range.max)
+#        sizes = [size]*nb
+#        if nb == 3: # dgemm
+#            sizes[2] = CONSTANT_VALUE
+#        else: # dtrsm
+#            assert nb == 2
+#            sizes[0] = CONSTANT_VALUE
+#        return tuple(sizes)
+#    else:
+#        sizes = [random.randint(size_range.min, size_range.max) for _ in range(nb)]
+#        i = random.choice([0, 1])
+#        sizes[i] = random.randint(big_size_range.min, big_size_range.max)
+#        return tuple(sizes)
 
 def get_dim(sizes):
     return tuple(max(sizes) for _ in range(len(sizes)))
