@@ -1,7 +1,7 @@
 #include <stdlib.h>
 #include <stdio.h>
 #include <time.h>
-#include <sys/time.h>
+#include <time.h>
 #include <assert.h>
 #include <string.h>
 #include <likwid.h>
@@ -49,8 +49,8 @@ int main(int argc, char* argv[]) {
     }
     assert(perfmon_getNumberOfGroups() == 1); // we do not handle the multi-group case (yet?)
 #endif
-    struct timeval before = {};
-    struct timeval after = {};
+    struct timespec before;
+    struct timespec after;
 
     for(int i = 0; i < nb_calls; i++) {
 #ifdef LIKWID_PERFMON
@@ -59,7 +59,7 @@ int main(int argc, char* argv[]) {
             LIKWID_MARKER_START("perf_dgemm");
         }
 #endif
-        gettimeofday(&before, NULL);
+        clock_gettime(CLOCK_MONOTONIC, &before);
         matrix_product(A, B, C, size);
 #ifdef LIKWID_PERFMON
 // See https://github.com/RRZE-HPC/likwid/issues/131 for the discussion about cumulative values.
@@ -84,8 +84,8 @@ int main(int argc, char* argv[]) {
             }
         }
 #endif
-        gettimeofday(&after, NULL);
-        double total_time = (after.tv_sec-before.tv_sec) + 1e-6*(after.tv_usec-before.tv_usec);
+        clock_gettime(CLOCK_MONOTONIC, &after);
+        double total_time = (after.tv_sec-before.tv_sec) + 1e-9*(after.tv_nsec-before.tv_nsec);
         fprintf(outfile, "%f\n", total_time);
     }
 
