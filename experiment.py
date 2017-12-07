@@ -654,6 +654,36 @@ class CPUPower(NoDataProgram):
         self.__set_governor__(self.default_governor)
         self.__set_frequencies__(self.min_freq, self.max_freq)
 
+class LstopoError(Exception):
+    pass
+
+class Hyperthreading(NoDataProgram):
+    xml = None # caching the result of lstopo
+
+    def get_xml(self):
+        if self.xml is None:
+            from lxml import etree
+            filename = self.tmp_filename + '.xml'
+            run_command(['lstopo', filename])
+            self.__class__.xml = etree.parse(filename).getroot()
+        return self.xml
+
+    def process_xml(self):
+        package = self.xml.findall('object')[0].findall('object')[0]
+        if package.get('type') != 'Package':
+            raise LstopoError('Wrong type for the package, got %s.' % package.get('type'))
+        l3 = package.findall('object')
+        for obj in l3:
+            if obj.get('type') != 'Cache' or obj.get('depth') != '3':
+                raise LstopoError('Wrong type or depth for the L3 cache, got %s, %s' % ()) # TODO
+        return package
+
+    def __command_line__(self):
+        return []
+
+    def __environment_variables__(self):
+        return {}
+
 class Dgemm(Program):
     header = ['call_index', 'size', 'nb_calls', 'time']
     key = ['run_index', 'call_index']
