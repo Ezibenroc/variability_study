@@ -673,6 +673,16 @@ class LstopoError(Exception):
 class Hyperthreading(NoDataProgram):
     xml = None # caching the result of lstopo
 
+    def __init__(self):
+        super().__init__()
+        self.all_cores = self.get_all_cores()
+        group_sizes = list(set([len(group) for group in self.all_cores]))
+        if len(group_sizes) != 1:
+            raise LstopoError('Heterogenous platform, got %s.' % group_sizes)
+        if group_sizes[0] != 2:
+            raise LstopoError('Wrong number of PU per core, got %d.' % group_sizes[0])
+        self.hyperthreads = [group[1] for group in self.all_cores]
+
     def get_xml(self):
         if self.xml is None:
             from lxml import etree
@@ -706,6 +716,23 @@ class Hyperthreading(NoDataProgram):
             assert pu.get('type') == 'PU'
             result.append(int(pu.get('os_index')))
         return result
+
+    @staticmethod
+    def set_core(core_id, value):
+        assert value in (0, 1)
+        filename = '/sys/devices/system/cpu/cpu%d/online' % core_id
+        with open(filename, 'w') as f:
+            f.write('%d\n' % value)
+
+    def setup(self):
+        print('Disabling cores %s' % ', '.join(str(n) for n in self.hyperthreads))
+        for core in self.hyperthreads:
+            self.set_core(core, 0)
+
+    def teardown(self):
+        print('Enabling cores %s' % ', '.join(str(n) for n in self.hyperthreads))
+        for core in self.hyperthreads:
+            self.set_core(core, 1)
 
     def __command_line__(self):
         return []

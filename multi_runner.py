@@ -32,6 +32,8 @@ if __name__ == '__main__':
             default='no', help='Use a FIFO scheduling policy.')
     parser.add_argument('--cpu_power', type=str, choices=['yes', 'no', 'random'],
             default='no', help='Force a high frequency for the CPU.')
+    parser.add_argument('--hyperthreading', type=str, choices=['yes', 'no', 'random'],
+            default='no', help='Remove the hyperthreading.')
     required_named = parser.add_argument_group('required named arguments')
     required_named.add_argument('--csv_file', type = str,
             required=True, help='Path of the CSV file for the results.')
@@ -58,6 +60,7 @@ if __name__ == '__main__':
         add_wrapper(ThreadMapping, args.thread_mapping, wrappers, args.nb_threads)
     add_wrapper(Scheduler, args.scheduler, wrappers)
     add_wrapper(CPUPower, args.cpu_power, wrappers)
+    add_wrapper(Hyperthreading, args.hyperthreading, wrappers)
 
     exp = ExpEngine(application=Dgemm(lib=args.lib, size=args.size, nb_calls=args.nb_calls, nb_threads=args.nb_threads, block_size=args.block_size, likwid=args.likwid), wrappers=wrappers)
     exp.run_all(nb_runs=args.nb_runs, csv_filename=args.csv_file, compress=True)
