@@ -455,14 +455,21 @@ class Scheduler(NoDataProgram):
     def __command_line__(self):
         return ['chrt', '--fifo', '99']
 
+def get_core_subset():
+    all_cores = Hyperthreading().get_all_cores()
+    assert len(set([len(group) for group in all_cores])) == 1
+    return [group[0] for group in all_cores]
+
 class ThreadMapping(Program):
     header = ['cpubind']
     def __init__(self, nb_threads):
         super().__init__()
         self.nb_cores = psutil.cpu_count()
-        if nb_threads not in (1, self.nb_cores):
-            raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
+        if nb_threads not in (1, self.nb_cores):
+            self.core_subset = get_core_subset()
+            if len(self.core_subset) != self.nb_threads:
+                raise ValueError('wrong number of threads, accepted values: 1, %d, %d.' % (len(self.core_subset), self.nb_cores))
 
     def __environment_variables__(self):
         return {'OMP_PROc_BIND' : 'TRUE'}
@@ -470,6 +477,8 @@ class ThreadMapping(Program):
     def __command_line__(self):
         if self.nb_threads == self.nb_cores:
             self.cpubind = 'all'
+        elif self.nb_threads > 1:
+            self.cpubind = ','.join(str(core) for core in self.core_subset)
         else:
             self.cpubind = str(random.randint(0, self.nb_cores-1))
         return ['numactl', '--physcpubind=%s' % self.cpubind, '--localalloc']   # we have to choose between localalloc and membind, let's pick localalloc
@@ -488,9 +497,11 @@ class Likwid(Program):
         super().__init__()
         self.group = group
         self.nb_cores = psutil.cpu_count()
-        if nb_threads not in (1, self.nb_cores):
-            raise ValueError('wrong number of threads, can only handle either one thread or a number equal to the number of cores (%d).' % self.nb_cores)
         self.nb_threads = nb_threads
+        if nb_threads not in (1, self.nb_cores):
+            self.core_subset = get_core_subset()
+            if len(self.core_subset) != self.nb_threads:
+                raise ValueError('wrong number of threads, accepted values: 1, %d, %d.' % (len(self.core_subset), self.nb_cores))
         self.tmp_output = os.path.join(self.tmp_dir.name, 'output.csv')
         self.check_group()
 
@@ -516,6 +527,8 @@ class Likwid(Program):
     def __command_line__(self):
         if self.nb_threads == self.nb_cores:
             self.cpubind = '%d-%d' % (0, self.nb_cores-1)
+        elif self.nb_threads > 1:
+            self.cpubind = ','.join(str(core) for core in self.core_subset)
         else:
             self.cpubind = str(random.randint(0, self.nb_cores-1))
         return ['likwid-perfctr', '-f', '-C', self.cpubind, '-g', self.group, '-o', self.tmp_output, '-m']
@@ -666,17 +679,33 @@ class Hyperthreading(NoDataProgram):
             filename = self.tmp_filename + '.xml'
             run_command(['lstopo', filename])
             self.__class__.xml = etree.parse(filename).getroot()
-        return self.xml
 
-    def process_xml(self):
+    def get_all_cores(self):
+        self.get_xml()
         package = self.xml.findall('object')[0].findall('object')[0]
         if package.get('type') != 'Package':
             raise LstopoError('Wrong type for the package, got %s.' % package.get('type'))
-        l3 = package.findall('object')
-        for obj in l3:
-            if obj.get('type') != 'Cache' or obj.get('depth') != '3':
-                raise LstopoError('Wrong type or depth for the L3 cache, got %s, %s' % ()) # TODO
-        return package
+        return self.process_cache(package)
+
+    @classmethod
+    def process_cache(cls, xml):
+        cache = xml.findall('object')
+        result = []
+        for obj in cache:
+            if obj.get('type') != 'Cache':
+                result.append(cls.process_core(obj))
+            else:
+                result.extend(cls.process_cache(obj))
+        return result
+
+    @staticmethod
+    def process_core(xml):
+        assert xml.get('type') == 'Core'
+        result = []
+        for pu in xml.findall('object'):
+            assert pu.get('type') == 'PU'
+            result.append(int(pu.get('os_index')))
+        return result
 
     def __command_line__(self):
         return []
