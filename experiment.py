@@ -692,28 +692,26 @@ class Hyperthreading(NoDataProgram):
 
     def get_all_cores(self):
         self.get_xml()
-        package = self.xml.findall('object')[0].findall('object')[0]
-        if package.get('type') != 'Package':
-            raise LstopoError('Wrong type for the package, got %s.' % package.get('type'))
-        return self.process_cache(package)
+        xml = self.xml.findall('object')[0]
+        return self.process_cache(xml)
 
     @classmethod
     def process_cache(cls, xml):
         cache = xml.findall('object')
         result = []
         for obj in cache:
-            if obj.get('type') != 'Cache':
+            if obj.get('type') == 'Core':
                 result.append(cls.process_core(obj))
-            else:
+            elif obj.get('type') in ('NUMANode', 'Package', 'Cache'):
                 result.extend(cls.process_cache(obj))
         return result
 
     @staticmethod
     def process_core(xml):
-        assert xml.get('type') == 'Core'
         result = []
         for pu in xml.findall('object'):
-            assert pu.get('type') == 'PU'
+            if pu.get('type') != 'PU':
+                raise LstopoError('Was expecting PU, got %s.' % pu.get('type'))
             result.append(int(pu.get('os_index')))
         return result
 
