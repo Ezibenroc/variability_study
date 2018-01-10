@@ -1,4 +1,5 @@
 from subprocess import Popen, PIPE
+import sys
 try:
     from subprocess import DEVNULL
 except ImportError:
