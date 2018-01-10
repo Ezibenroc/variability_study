@@ -37,7 +37,9 @@ def get_openblas_archive():
         local('wget %s -O %s' % (OPENBLAS_URL, OPENBLAS_ARCHIVE))
 
 def clean():
-    run('rm -rf ~/*')
+    run('rm -rf ~/* /usr/lib/openblas-base /usr/lib/libopenblas.so')
+    run('yes | pip3 uninstall %s' % ' '.join(PIP_PACKAGES))
+    run('yes | apt remove %s' % ' '.join(APT_PACKAGES))
 
 def copy_archives():
     put('openblas.zip', '~')
@@ -68,14 +70,13 @@ def extract_experiment():
 
 def test_installation():
     with cd(EXP_DIRECTORY):
-        run('python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1 --stat')
+        run('python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1')
         run('python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --cpu_power=random --scheduler=random --thread_mapping=random --hyperthreading=random')
         run('python3 ./multi_runner.py --nb_runs 3 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --likwid CLOCK L3CACHE')
 
 def all():
     get_openblas_archive()
-    clean()
-    copy_archives() 
+    copy_archives()
     install_apt_packages()
     install_openblas()
     install_pip_packages()
