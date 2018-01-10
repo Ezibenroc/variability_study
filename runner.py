@@ -20,11 +20,6 @@ try:
 except ImportError:
     DEVNULL = open('/dev/null', 'w')
 
-BLUE_STR = '\033[1m\033[94m'
-GREEN_STR = '\033[1m\033[92m'
-RED_STR = '\033[1m\033[91m'
-END_STR = '\033[0m'
-
 DGEMM_EXEC = './dgemm_test'
 DTRSM_EXEC = './dtrsm_test'
 
@@ -34,21 +29,21 @@ EXP_HOSTNAME = socket.gethostname()
 EXP_DATE = time.strftime("%Y/%m/%d")
 INTERCOOLR_FILE = '/tmp/intercooler.log'
 
-def print_color(msg, color):
-    print('%s%s%s' % (color, msg, END_STR))
-
-def print_blue(msg):
-    print_color(msg, BLUE_STR)
-
-def print_green(msg):
-    print_color(msg, GREEN_STR)
+import logging
+logger = logging.getLogger(__name__)
+logger.setLevel(level=logging.DEBUG)
+fh = logging.StreamHandler()
+fh.setFormatter(logging.Formatter('%(asctime)s %(levelname)s %(message)s'))
+logger.addHandler(fh)
+import warnings # psutil gives some warnings, let's just ignore them
+warnings.simplefilter("ignore")
 
 def error(msg, stdout=None, stderr=None):
-    sys.stderr.write('%sERROR: %s%s\n' % (RED_STR, msg, END_STR))
+    logger.error(msg)
     if stdout:
-        sys.stderr.write('\n%sstdout was:%s\n%s\n' % (RED_STR, END_STR, stdout))
+        logger.error(stdout)
     if stderr:
-        sys.stderr.write('\n%sstderr was:%s\n%s\n' % (RED_STR, END_STR, stderr))
+        logger.error(stderr)
     sys.exit(1)
 
 def parse_stat_line(line):
@@ -79,7 +74,7 @@ def run_command(args, get_stat=False, wrapper=None):
     if wrapper is not None:
         wrapper = re.split('\s', wrapper.strip())
         args = wrapper + args
-    print_blue('%s' % ' '.join(args))
+    logger.info(' '.join(args))
     process = Popen(args, stdout=PIPE, stderr=PIPE)
     output = process.communicate()
     if process.wait() != 0:
