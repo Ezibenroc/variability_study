@@ -508,7 +508,7 @@ class Likwid(Program):
     @classmethod
     def get_available_groups(cls):
         if cls.available_groups is None:
-            stdout, stderr = run_command(['likwid-perfctr', '-a'])
+            stdout = run_command(['likwid-perfctr', '-a'])
             stdout = stdout.decode('ascii')
             lines = stdout.split('\n')[2:]
             lines = [line.strip().split() for line in lines]
@@ -618,7 +618,7 @@ class CPUPower(NoDataProgram):
     def __init__(self):
         super().__init__()
         governors = run_command(['cpufreq-info', '-g'])
-        governors = governors[0].decode('ascii').split()
+        governors = governors.decode('ascii').split()
         self.max_governor = 'performance'
         self.default_governor = 'powersave'
         if self.max_governor not in governors:
