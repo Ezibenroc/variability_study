@@ -16,7 +16,7 @@ import cpuinfo # https://github.com/workhorsy/py-cpuinfo
 import git     # https://github.com/gitpython-developers/GitPython
 from multiprocessing import cpu_count
 
-from runner import run_command, compile_generic
+from utils import run_command, compile_generic
 
 def mean(l):
     return sum(l)/len(l)
