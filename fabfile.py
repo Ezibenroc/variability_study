@@ -1,5 +1,9 @@
 from fabric.api import local, run, cd, env, put
+from fabric.network import ssh
 import os
+
+env.use_ssh_config = True
+ssh.util.log_to_file('/tmp/paramiko.log', 10)
 
 OPENBLAS_ARCHIVE   = 'openblas.zip'
 OPENBLAS_DIRECTORY = 'OpenBLAS-0.2.20'
