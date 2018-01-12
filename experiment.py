@@ -434,6 +434,8 @@ class Perf(Program):
         data = dict()
         metrics_to_handle = set(self.metrics)
         for line in lines[2:]:
+            if line[2][-2:] == ':u': # no idea why, there is ':u' suffixed to the string on some installation
+                line[2] = line[2][:-2]
             if line[2] in metrics_to_handle:
                 result = line[0]
                 try:
