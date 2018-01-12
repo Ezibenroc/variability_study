@@ -702,7 +702,7 @@ class Hyperthreading(NoDataProgram):
         for obj in cache:
             if obj.get('type') == 'Core':
                 result.append(cls.process_core(obj))
-            elif obj.get('type') in ('NUMANode', 'Package', 'Cache'):
+            elif obj.get('type') in ('NUMANode', 'Package', 'Cache', 'L3Cache', 'L2Cache', 'L1Cache', 'L1iCache'):
                 result.extend(cls.process_cache(obj))
         return result
 
