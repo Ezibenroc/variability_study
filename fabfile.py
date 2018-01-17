@@ -43,19 +43,23 @@ def get_openblas_archive():
     if not os.path.isfile(OPENBLAS_ARCHIVE):
         local('wget %s -O %s' % (OPENBLAS_URL, OPENBLAS_ARCHIVE))
 
+@parallel
 def clean():
     run('rm -rf ~/* /usr/lib/openblas-base /usr/lib/libopenblas.so')
     run('yes | pip3 uninstall %s' % ' '.join(PIP_PACKAGES))
     run('yes | apt remove %s' % ' '.join(APT_PACKAGES))
 
+@parallel
 def copy_archives():
     put('openblas.zip', '~')
     put(EXP_ARCHIVE, '~')
 
+@parallel
 def install_apt_packages():
     run('yes | apt upgrade')
     run('yes | apt install %s' % ' '.join(APT_PACKAGES))
 
+@parallel
 def install_openblas():
     run('yes | unzip %s' % OPENBLAS_ARCHIVE)
     with cd(OPENBLAS_DIRECTORY):
@@ -64,17 +68,21 @@ def install_openblas():
     run('mkdir /usr/lib/openblas-base/')
     run('ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so')
 
+@parallel
 def install_pip_packages():
     run('wget https://bootstrap.pypa.io/get-pip.py')
     run('python3 get-pip.py')
     run('pip3 install %s' % ' '.join(PIP_PACKAGES))
 
+@parallel
 def setup_os():
     run('modprobe msr')
 
+@parallel
 def extract_experiment():
     run('yes | unzip %s' % EXP_ARCHIVE)
 
+@parallel
 def test_installation():
     with cd(EXP_DIRECTORY):
         run('python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1')
@@ -104,12 +112,13 @@ def run_exp(experiment_file, result_file):
             for line in in_f:
                 out_f.write(line)
 
+@runs_once
 def install():
-    get_openblas_archive()
-    copy_archives()
-    install_apt_packages()
-    install_openblas()
-    install_pip_packages()
-    setup_os()
-    extract_experiment()
-    test_installation()
+    execute(get_openblas_archive)
+    execute(copy_archives)
+    execute(install_apt_packages)
+    execute(install_openblas)
+    execute(install_pip_packages)
+    execute(setup_os)
+    execute(extract_experiment)
+    execute(test_installation)
