@@ -1,6 +1,8 @@
-from fabric.api import local, run, cd, env, put
+from fabric.api import local, run, cd, env, put, get, task, runs_once, parallel, execute
 from fabric.network import ssh
 import os
+import zipfile
+import shutil
 
 env.use_ssh_config = True
 ssh.util.log_to_file('/tmp/paramiko.log', 10)
@@ -36,6 +38,7 @@ PIP_PACKAGES = [
         'lxml',
     ]
 
+@runs_once
 def get_openblas_archive():
     if not os.path.isfile(OPENBLAS_ARCHIVE):
         local('wget %s -O %s' % (OPENBLAS_URL, OPENBLAS_ARCHIVE))
@@ -54,7 +57,7 @@ def install_apt_packages():
     run('yes | apt install %s' % ' '.join(APT_PACKAGES))
 
 def install_openblas():
-    run('unzip %s' % OPENBLAS_ARCHIVE)
+    run('yes | unzip %s' % OPENBLAS_ARCHIVE)
     with cd(OPENBLAS_DIRECTORY):
         run('make -j 8')
         run('make install PREFIX=/usr')
@@ -70,7 +73,7 @@ def setup_os():
     run('modprobe msr')
 
 def extract_experiment():
-    run('unzip %s' % EXP_ARCHIVE)
+    run('yes | unzip %s' % EXP_ARCHIVE)
 
 def test_installation():
     with cd(EXP_DIRECTORY):
@@ -78,7 +81,30 @@ def test_installation():
         run('python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --cpu_power=random --scheduler=random --thread_mapping=random --hyperthreading=random')
         run('python3 ./multi_runner.py --nb_runs 3 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --likwid CLOCK L3CACHE')
 
-def all():
+@parallel
+def __run_exp(experiment_file):
+    result_file = 'tmp.csv'
+    with cd(EXP_DIRECTORY):
+        put(experiment_file, experiment_file)
+        run('python3 %s %s' % (experiment_file, result_file))
+        result = get(result_file)
+        assert len(result) == 1
+        result = result[0]
+    return result
+
+@runs_once
+def run_exp(experiment_file, result_file):
+    results = execute(__run_exp, experiment_file)
+    file_names = list(results.values())
+    assert len(file_names) > 0
+    shutil.copy(file_names[0], result_file)
+    for name in file_names[1:]:
+        with open(result_file, 'a') as out_f, open(name, 'r') as in_f:
+            in_f.readline() # skip the first one, header of the CSV
+            for line in in_f:
+                out_f.write(line)
+
+def install():
     get_openblas_archive()
     copy_archives()
     install_apt_packages()

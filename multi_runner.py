@@ -63,4 +63,4 @@ if __name__ == '__main__':
     add_wrapper(Hyperthreading, args.hyperthreading, wrappers)
 
     exp = ExpEngine(application=Dgemm(lib=args.lib, size=args.size, nb_calls=args.nb_calls, nb_threads=args.nb_threads, block_size=args.block_size, likwid=args.likwid), wrappers=wrappers)
-    exp.run_all(nb_runs=args.nb_runs, csv_filename=args.csv_file, compress=True)
+    exp.run_all(nb_runs=args.nb_runs, filename=args.csv_file)

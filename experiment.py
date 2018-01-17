@@ -824,7 +824,7 @@ class ExpEngine:
         all_data = all_data.reset_index().sort_values(by=['run_index', 'call_index']).fillna(method='ffill')
         return all_data
 
-    def run_all(self, csv_filename, nb_runs, compress=False):
+    def run_all(self, filename, nb_runs):
         for run_index in range(nb_runs):
             self.randomly_enable()
             self.setup()
@@ -832,10 +832,5 @@ class ExpEngine:
             self.teardown()
             self.fetch_data()
         all_data =self.gather_data()
-        with open(csv_filename, 'w') as f:
+        with open(filename, 'w') as f:
             f.write(all_data.to_csv())
-        if compress:
-            zip_name = os.path.splitext(csv_filename)[0] + '.zip'
-            with zipfile.ZipFile(zip_name, 'w', zipfile.ZIP_DEFLATED) as myzip:
-                myzip.write(csv_filename)
-            print('Compressed the results: %s' % zip_name)
