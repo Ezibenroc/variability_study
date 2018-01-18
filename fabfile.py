@@ -38,6 +38,14 @@ PIP_PACKAGES = [
         'lxml',
     ]
 
+# When running a fab command with --hide stdout,stderr, it seems that fabric
+# still gets all the text from the remote machines, it just does not show it.
+# This leads to a very high CPU consumption, especially when several hosts are
+# used.
+# For instance, try running a task that simply calls run('yes').
+def run_no_output(cmd):
+    run('%s > /dev/null 2>&1' % cmd)
+
 @runs_once
 def get_openblas_archive():
     if not os.path.isfile(OPENBLAS_ARCHIVE):
@@ -45,9 +53,9 @@ def get_openblas_archive():
 
 @parallel
 def clean():
-    run('rm -rf ~/* /usr/lib/openblas-base /usr/lib/libopenblas.so')
-    run('yes | pip3 uninstall %s' % ' '.join(PIP_PACKAGES))
-    run('yes | apt remove %s' % ' '.join(APT_PACKAGES))
+    run_no_output('rm -rf ~/* /usr/lib/openblas-base /usr/lib/libopenblas.so')
+    run_no_output('yes | pip3 uninstall %s' % ' '.join(PIP_PACKAGES))
+    run_no_output('yes | apt remove %s' % ' '.join(APT_PACKAGES))
 
 @parallel
 def copy_archives():
@@ -56,45 +64,45 @@ def copy_archives():
 
 @parallel
 def install_apt_packages():
-    run('yes | apt upgrade')
-    run('yes | apt install %s' % ' '.join(APT_PACKAGES))
+    run_no_output('yes | apt upgrade')
+    run_no_output('yes | apt install %s' % ' '.join(APT_PACKAGES))
 
 @parallel
 def install_openblas():
-    run('yes | unzip %s' % OPENBLAS_ARCHIVE)
+    run_no_output('yes | unzip %s' % OPENBLAS_ARCHIVE)
     with cd(OPENBLAS_DIRECTORY):
-        run('make -j 8')
-        run('make install PREFIX=/usr')
-    run('mkdir /usr/lib/openblas-base/')
-    run('ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so')
+        run_no_output('make -j 8')
+        run_no_output('make install PREFIX=/usr')
+    run_no_output('mkdir /usr/lib/openblas-base/')
+    run_no_output('ln -s /usr/lib/libopenblas.so /usr/lib/openblas-base/libblas.so')
 
 @parallel
 def install_pip_packages():
-    run('wget https://bootstrap.pypa.io/get-pip.py')
-    run('python3 get-pip.py')
-    run('pip3 install %s' % ' '.join(PIP_PACKAGES))
+    run_no_output('wget https://bootstrap.pypa.io/get-pip.py')
+    run_no_output('python3 get-pip.py')
+    run_no_output('pip3 install %s' % ' '.join(PIP_PACKAGES))
 
 @parallel
 def setup_os():
-    run('modprobe msr')
+    run_no_output('modprobe msr')
 
 @parallel
 def extract_experiment():
-    run('yes | unzip %s' % EXP_ARCHIVE)
+    run_no_output('yes | unzip %s' % EXP_ARCHIVE)
 
 @parallel
 def test_installation():
     with cd(EXP_DIRECTORY):
-        run('python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1')
-        run('python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --cpu_power=random --scheduler=random --thread_mapping=random --hyperthreading=random')
-        run('python3 ./multi_runner.py --nb_runs 3 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --likwid CLOCK L3CACHE')
+        run_no_output('python3 ./runner.py --csv_file /tmp/test.csv --lib openblas --dgemm -s 64,64 -n 1 -r 1')
+        run_no_output('python3 ./multi_runner.py --nb_runs 10 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --cpu_power=random --scheduler=random --thread_mapping=random --hyperthreading=random')
+        run_no_output('python3 ./multi_runner.py --nb_runs 3 --nb_calls 10 --size 100 -np 1 --csv_file /tmp/test.csv --lib naive --likwid CLOCK L3CACHE')
 
 @parallel
 def __run_exp(experiment_file):
     result_file = 'tmp.csv'
     with cd(EXP_DIRECTORY):
         put(experiment_file, experiment_file)
-        run('python3 %s %s' % (experiment_file, result_file))
+        run_no_output('python3 %s %s' % (experiment_file, result_file))
         result = get(result_file)
         assert len(result) == 1
         result = result[0]
